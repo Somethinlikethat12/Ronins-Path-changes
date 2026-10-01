@@ -22,6 +22,7 @@ class Game {
         const o = opts || {};
         this.seed = seed;
         this.canvas = canvas;
+        this.pauseFeedback = document.getElementById('pause-feedback');
         this.ctx = canvas.getContext('2d');
         this.sfx = new Sfx();
         this.input = new Input(canvas, () => this.sfx.unlock());
@@ -262,6 +263,7 @@ class Game {
     tick(dt) {
         const inp = this.input, player = this.player, world = this.world, fx = this.fx;
         this.realTime += dt;
+        this.pauseFeedback.hidden = !(this.paused && !this.showHelp);
         this.saveNoteT -= dt;
         this.newGameConfirmT -= dt;
         this.resetMapConfirmT -= dt;
