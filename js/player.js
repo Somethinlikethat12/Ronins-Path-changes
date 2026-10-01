@@ -817,7 +817,7 @@ class Player extends Actor {
         return P_HIT;
     }
 
-    /** An elite parried our swing. */
+    /** An enemy parried our swing. */
     recoil(awayAng) {
         this.st = 'STAGGER';
         this.stT = 0;

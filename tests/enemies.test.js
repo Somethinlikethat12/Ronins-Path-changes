@@ -9,8 +9,8 @@ const context = vm.createContext({ console });
 for (const name of ['util', 'skills', 'settings', 'world', 'enemy', 'game', 'save']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name + '.js'), 'utf8'), context);
 }
-const { Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE } = vm.runInContext(
-    '({ Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE })', context);
+const { Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_HP_SCALE, NORMAL_ENEMY_POSTURE_SCALE } = vm.runInContext(
+    '({ Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_HP_SCALE, NORMAL_ENEMY_POSTURE_SCALE })', context);
 
 const game = { difficulty: difficultyFor(null, 1, 0) };
 const types = [
@@ -20,8 +20,8 @@ const types = [
 ];
 for (const [type, hp, posture, move] of types) {
     const enemy = new Enemy(game, type, 100, 100, false, null, 7);
-    assert.equal(enemy.maxHp, hp);
-    assert.equal(enemy.maxPosture, posture);
+    assert.equal(enemy.maxHp, hp * NORMAL_ENEMY_HP_SCALE);
+    assert.equal(enemy.maxPosture, posture * NORMAL_ENEMY_POSTURE_SCALE);
     assert.equal(enemy.dmgScale, ENEMY_DAMAGE_SCALE);
     assert(enemy.combos.some(combo => combo.some(atk => atk.name === move)));
     assert(enemy.combos.every(combo => combo.every(atk => atk && atk.windup > 0 && atk.recovery > 0)));
@@ -40,8 +40,8 @@ for (const move of [EA.R_BACKHAND, EA.SP_HOOK, EA.BR_UPPERCUT]) {
 
 const scaled = { difficulty: difficultyFor({ enemyScale: 25 }, 2, 2) };
 const scaledEnemy = new Enemy(scaled, 'SPEAR', 100, 100, false, null, 7);
-assert.equal(scaledEnemy.maxHp, 72 * scaled.difficulty.enemyHp);
-assert.equal(scaledEnemy.maxPosture, 72 * scaled.difficulty.enemyPosture);
+assert.equal(scaledEnemy.maxHp, 72 * NORMAL_ENEMY_HP_SCALE * scaled.difficulty.enemyHp);
+assert.equal(scaledEnemy.maxPosture, 72 * NORMAL_ENEMY_POSTURE_SCALE * scaled.difficulty.enemyPosture);
 assert.equal(scaledEnemy.dmgScale, ENEMY_DAMAGE_SCALE * scaled.difficulty.enemyDmg);
 
 const live = { coop: { settings: {} }, coopSettings: { enemyScale: 25, countScale: 25 },
@@ -49,7 +49,35 @@ const live = { coop: { settings: {} }, coopSettings: { enemyScale: 25, countScal
     enemies: [new Enemy({ difficulty: difficultyFor({ enemyScale: 25 }, 2, 0) }, 'RONIN', 100, 100, false, null, 7)] };
 Game.prototype.applyCoopSettings.call(live, { enemyScale: 50, countScale: 25 });
 assert.equal(live.enemies[0].dmgScale, ENEMY_DAMAGE_SCALE * live.difficulty.enemyDmg);
-assert.equal(live.enemies[0].maxHp, 82 * live.difficulty.enemyHp);
+assert(Math.abs(live.enemies[0].maxHp - 82 * NORMAL_ENEMY_HP_SCALE * live.difficulty.enemyHp) < 1e-9);
+
+const rolePlayer = {
+    x: 100, y: 100, r: 16, st: 'FREE', facing: 0,
+    untargetable: () => false,
+    angleTo(target) { return Math.atan2(target.y - this.y, target.x - this.x); },
+};
+const roleGame = { player: rolePlayer, enemies: [] };
+for (const method of ['enemyGroup', 'enemyPressured', 'enemyShouldHangBack', 'requestToken']) {
+    roleGame[method] = Game.prototype[method];
+}
+const lead = new Enemy({ difficulty: game.difficulty }, 'RONIN', 180, 100, false, null, 21);
+const support = new Enemy({ difficulty: game.difficulty }, 'SPEAR', 220, 100, false, null, 22);
+for (const foe of [lead, support]) {
+    foe.g = roleGame;
+    foe.target = rolePlayer;
+    foe.aware = true;
+}
+roleGame.enemies = [lead, support];
+assert(roleGame.requestToken(lead));
+lead.hasToken = true;
+assert(!roleGame.requestToken(support));
+assert(roleGame.enemyShouldHangBack(support));
+support.pressureT = 2;
+assert(roleGame.requestToken(support));
+assert(!roleGame.enemyShouldHangBack(support));
+support.pressureT = 0;
+lead.st = 'DEAD';
+assert(roleGame.requestToken(support));
 
 const eliteNames = vm.runInContext('ELITES', context);
 const supers = vm.runInContext('ELITE_SUPERS', context);
@@ -94,7 +122,9 @@ for (const foe of [daimyo, ...eliteNames.map(([name, type]) => new Enemy(game, t
 }
 ordinary.rnd.nextDouble = () => 0;
 ordinary.target = { st: 'HEAL', guarding: true };
-assert.equal(ordinary.pickCombo(), ordinary.combos[0]);
+assert.equal(ordinary.pickCombo()[0].windup,
+    Math.min(...ordinary.combos.filter(c => c.length > 1).map(c => c[0].windup)));
+assert(ordinary.pickGap().length > 1);
 
 function spawnFixture() {
     const world = { camps: [
@@ -206,5 +236,25 @@ fatal.startCombo([fatal.combos[0][0]], 1);
 fatal.hp = strike.damage;
 fatal.takeHit(attacker, strike);
 assert.equal(fatal.st, 'DEAD');
+
+const parrier = new Enemy(combatGame, 'RONIN', 100, 100, false, null, 8);
+const spammer = Object.assign({}, attacker, {
+    x: 70, y: 100, st: 'ATTACK', guarding: false,
+    recoilCalls: 0,
+    recoil() { this.recoilCalls++; },
+});
+parrier.aware = true;
+parrier.setSt('ENGAGE');
+parrier.rnd.nextDouble = () => 0;
+const parryStrike = Object.assign({}, strike, { arc: 2 });
+parrier.takeHit(spammer, parryStrike);
+assert.equal(parrier.blockStreak, 1);
+parrier.setSt('ENGAGE');
+combatGame.time = 0.2;
+parrier.takeHit(spammer, parryStrike);
+assert.equal(spammer.recoilCalls, 1);
+assert.equal(parrier.st, 'WINDUP');
+assert.equal(parrier.hasToken, true);
+assert.equal(parrier.attackRead, 0);
 
 console.log('Enemy variation and scaling checks passed');

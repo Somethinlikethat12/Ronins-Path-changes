@@ -8,6 +8,8 @@ function withDash(a, speed) {
 
 // ---- move sets ----
 const ENEMY_DAMAGE_SCALE = 1.12;
+const NORMAL_ENEMY_HP_SCALE = 1.35;
+const NORMAL_ENEMY_POSTURE_SCALE = 1.2;
 const EA = {
     R_A: new Attack('slash', .45, .12, .45, 70, 140, 14, 18, 240),
     R_B: new Attack('slash2', .30, .12, .50, 70, 140, 14, 18, 240),
@@ -79,6 +81,8 @@ class Enemy extends Actor {
         this.hyper = false;
         this.lastDamageT = -99;
         this.blockStreak = 0;
+        this.attackRead = 0;
+        this.lastSwingT = -99;
         this.flinchCount = 0;
         this.blockAnim = 0;
         this.hitFlash = 0;
@@ -98,6 +102,8 @@ class Enemy extends Actor {
         this.dodgeDy = 0;
         this.dodgeCounter = false;
         this.seenSwing = -1;
+        this.pressureT = 0;
+        this.lastCombo = null;
         this.rnd = new Rng(seed);
         this.facing = this.rnd.nextDouble() * TAU;
         switch (type) {
@@ -138,6 +144,10 @@ class Enemy extends Actor {
             this.dodgeChance = 0.3;
             this.lives = 3;
             this.hyper = true;
+        }
+        if (!this.elite) {
+            this.maxHp *= NORMAL_ENEMY_HP_SCALE;
+            this.maxPosture *= NORMAL_ENEMY_POSTURE_SCALE;
         }
         // party size and New Game + tier scale every enemy by the same published numbers
         const diff = g.difficulty;
@@ -285,7 +295,7 @@ class Enemy extends Actor {
     }
 
     pickCombo() {
-        if (this.elite && this.target) {
+        if (this.target) {
             const p = this.target;
             const signature = this.boss ? EA.DAIMYO_ASHFALL : ELITE_SUPERS[this.eliteStyle];
             if (p.st === 'HEAL' || p.st === 'STAGGER') {
@@ -293,20 +303,30 @@ class Enemy extends Actor {
                 const quick = this.combos.filter(c => c.length > 1 && c[0].windup <= minWindup + 0.06);
                 if (quick.length) return quick[this.rnd.nextInt(quick.length)];
             }
-            if (p.guarding && this.rnd.nextDouble() < 0.65) {
+            if (p.guarding && this.rnd.nextDouble() < (this.elite ? 0.75 : 0.6)) {
                 const pressure = this.combos.filter(c => c.some(a => a.perilous));
                 if (pressure.length) return pressure[this.rnd.nextInt(pressure.length)];
+            }
+            if ((p.st === 'ATTACK' || p.st === 'ART' || p.st === 'THROW') && this.rnd.nextDouble() < 0.7) {
+                const minWindup = Math.min(...this.combos.map(c => c[0].windup));
+                const counters = this.combos.filter(c => c[0].windup <= minWindup + 0.08);
+                if (counters.length) return counters[this.rnd.nextInt(counters.length)];
             }
             if (signature && this.rnd.nextDouble() < (this.lives === 1 ? 0.55 : this.boss && this.lives === 2 ? 0.4 : 0.22)) {
                 const finishers = this.combos.filter(c => c[c.length - 1].name === signature.name);
                 if (finishers.length) return finishers[this.rnd.nextInt(finishers.length)];
             }
         }
-        return this.combos[this.rnd.nextInt(this.combos.length)];
+        let choice = this.combos[this.rnd.nextInt(this.combos.length)];
+        if (this.combos.length > 1 && choice === this.lastCombo) {
+            choice = this.combos[(this.combos.indexOf(choice) + 1 + this.rnd.nextInt(this.combos.length - 1)) % this.combos.length];
+        }
+        this.lastCombo = choice;
+        return choice;
     }
 
     pickGap() {
-        if (this.elite && this.target && (this.target.st === 'HEAL' || this.target.st === 'STAGGER')) {
+        if (this.target && (this.target.st === 'HEAL' || this.target.st === 'STAGGER')) {
             const chains = this.gap.filter(c => c.length > 1);
             if (chains.length) return chains[this.rnd.nextInt(chains.length)];
         }
@@ -353,6 +373,8 @@ class Enemy extends Actor {
         this.showBars -= dt;
         this.perilousT -= dt;
         this.dodgeCd -= dt;
+        this.pressureT -= dt;
+        if (g.time - this.lastSwingT > 1.1) this.attackRead = Math.max(0, this.attackRead - dt * 2);
         if (Math.abs(this.kbx) + Math.abs(this.kby) > 1) {
             this.move(g.world, this.kbx * dt, this.kby * dt);
             const k = Math.exp(-dt * 10);
@@ -379,6 +401,7 @@ class Enemy extends Actor {
         if (p.swingId !== this.seenSwing) {
             this.seenSwing = p.swingId;
             const aimedAtMe = Math.abs(U.angDiff(p.facing, p.angleTo(this))) < 1.2 || (p.st === 'ART' && p.curArt.spin);
+            if (aimedAtMe && d < 220 + this.r) this.pressureT = 2.2;
             if (this.st === 'ENGAGE' && pAlive && aimedAtMe && d < 170 + this.r && this.dodgeCd <= 0
                 && this.rnd.nextDouble() < this.dodgeChance) {
                 this.startDodge(p, p.st === 'ART' || this.rnd.nextDouble() < 0.4, true);
@@ -408,7 +431,7 @@ class Enemy extends Actor {
                     } else {
                         this.releaseToken();
                         this.attackCd = this.elite ? (this.lives === 1 ? 0.16 : 0.22) + this.rnd.nextDouble() * (this.lives === 1 ? 0.36 : 0.45)
-                            : this.vet ? 0.6 + this.rnd.nextDouble() * 0.9 : 0.9 + this.rnd.nextDouble() * 1.2;
+                            : this.vet ? 0.35 + this.rnd.nextDouble() * 0.65 : 0.55 + this.rnd.nextDouble() * 0.7;
                         this.setSt('ENGAGE');
                     }
                 }
@@ -498,7 +521,7 @@ class Enemy extends Actor {
                 return;
             }
             if (this.gap.length > 0 && d > this.reach + p.r + 30 && d < 280
-                && (this.elite && p.st === 'HEAL' || this.rnd.nextDouble() < dt * (this.vet ? 2.2 : 0.9))) {
+                && (p.st === 'HEAL' || p.st === 'STAGGER' || this.rnd.nextDouble() < dt * (this.vet ? 3.2 : 1.8))) {
                 this.startCombo(this.pickGap(), 1);
                 return;
             }
@@ -506,7 +529,9 @@ class Enemy extends Actor {
             this.move(g.world, Math.cos(toP) * sp * dt, Math.sin(toP) * sp * dt);
             this.walkAnim += sp * dt;
         } else {
-            this.circle(dt, d, toP, this.type === 'BRUTE' ? 200 : 165, 0.55);
+            const support = g.enemyShouldHangBack !== undefined && g.enemyShouldHangBack(this);
+            this.circle(dt, d, toP, support ? (this.type === 'BRUTE' ? 285 : 250) : (this.type === 'BRUTE' ? 200 : 165),
+                support ? 0.72 : 0.55);
         }
     }
 
@@ -536,7 +561,7 @@ class Enemy extends Actor {
         const a = back ? toP + Math.PI + side * 0.5 : toP + side * (Math.PI / 2 + 0.35);
         this.dodgeDx = Math.cos(a);
         this.dodgeDy = Math.sin(a);
-        this.dodgeCounter = mayCounter && (this.hasToken || this.rnd.nextDouble() < (this.vet ? 0.6 : 0.35));
+        this.dodgeCounter = mayCounter && (this.hasToken || this.pressureT > 0 || this.rnd.nextDouble() < (this.vet ? 0.72 : 0.5));
         this.releaseToken();
         this.setSt('DODGE');
         this.stDur = 0.32;
@@ -568,10 +593,11 @@ class Enemy extends Actor {
         this.atkHit = false;
         this.attackHitsTaken = 0;
         this.setSt('WINDUP');
-        // veterans vary their timing so the rhythm can't be memorised
+        // Every fighter varies timing slightly; veterans are substantially less predictable.
         const signature = this.boss ? EA.DAIMYO_ASHFALL : ELITE_SUPERS[this.eliteStyle];
         const superMove = signature !== undefined && this.atk.name === signature.name;
-        this.stDur = this.atk.windup * (superMove ? 1 : windupMul) * (this.vet ? 0.88 + this.rnd.nextDouble() * 0.3 : 1);
+        const timing = this.vet ? 0.86 + this.rnd.nextDouble() * 0.28 : 0.92 + this.rnd.nextDouble() * 0.16;
+        this.stDur = this.atk.windup * (superMove ? 1 : windupMul) * timing;
         if (superMove) {
             g.fx.text(this.atk.name.toUpperCase(), this.x, this.y - 56, rgb(255, 130, 80), 17);
             g.fx.ring(this.x, this.y, 16, this.atk.range, this.stDur, 3, rgb(255, 90, 65));
@@ -668,20 +694,21 @@ class Enemy extends Actor {
         const cx = this.x - Math.cos(ang) * this.r, cy = this.y - Math.sin(ang) * this.r;
         this.showBars = 4;
         this.lastDamageT = g.time;
+        this.pressureT = 3;
+        this.attackRead = g.time - this.lastSwingT < 0.85 ? Math.min(5, this.attackRead + 1) : 1;
+        this.lastSwingT = g.time;
         const wasAware = this.aware;
         if (!this.aware) this.alert(true);
         const neutral = wasAware && (this.st === 'ENGAGE' || this.st === 'ALERT' || this.st === 'RETURN');
-        if (neutral && !pa.pierce && this.rnd.nextDouble() < (this.blockChance + this.blockStreak * 0.1) * (pa.art ? 0.5 : 1)) {
+        const readBonus = Math.max(0, this.attackRead - 1) * 0.08;
+        const blockChance = Math.min(0.92, this.blockChance + this.blockStreak * 0.1 + readBonus);
+        if (neutral && !pa.pierce && this.rnd.nextDouble() < blockChance * (pa.art ? 0.5 : 1)) {
             this.facing = ang + Math.PI;
-            if (this.elite && !pa.art && pa.arc > 0 && this.blockStreak >= 1 && this.rnd.nextDouble() < 0.55) {
-                g.fx.sparks(cx, cy, ang + Math.PI, 2.2, 22, 480, rgb(255, 120, 200));
-                g.sfx.play('CLANG');
-                g.hitstop(0.07);
-                g.shake(6);
-                g.fx.text('PARRIED!', p.x, p.y - 42, rgb(255, 110, 110), 16);
-                p.recoil(ang + Math.PI);
-                this.hasToken = true;
-                this.startCombo(this.pickCombo(), 0.55);
+            const skill = this.elite ? 0.3 : this.vet ? 0.18 : this.type === 'RONIN' ? 0.12 : this.type === 'SPEAR' ? 0.08 : 0.04;
+            const parryChance = Math.min(0.9, skill + this.blockStreak * 0.18 + Math.max(0, this.attackRead - 1) * 0.2);
+            if (!pa.art && pa.arc > 0 && (this.blockStreak > 0 || this.attackRead > 1)
+                && this.rnd.nextDouble() < parryChance) {
+                this.parryPlayer(p, ang, cx, cy);
                 return;
             }
             this.posture += pa.posture * 1.1;
@@ -701,6 +728,7 @@ class Enemy extends Actor {
                 this.hasToken = true;
                 this.startCombo(this.pickCombo(), 0.6);
             }
+
             return;
         }
         this.blockStreak = 0;
@@ -746,6 +774,20 @@ class Enemy extends Actor {
                 this.kby = Math.sin(ang) * 140;
             }
         }
+    }
+
+    parryPlayer(p, ang, cx, cy) {
+        const g = this.g;
+        g.fx.sparks(cx, cy, ang + Math.PI, 2.2, 22, 480, rgb(255, 120, 200));
+        g.sfx.play('CLANG');
+        g.hitstop(0.07);
+        g.shake(6);
+        g.fx.text('PARRIED!', p.x, p.y - 42, rgb(255, 110, 110), 16);
+        p.recoil(ang + Math.PI);
+        this.blockStreak = 0;
+        this.attackRead = 0;
+        this.hasToken = true;
+        this.startCombo(this.pickCombo(), this.vet ? 0.48 : 0.55);
     }
 
     /** Iai Flash and other unblockable damage. */

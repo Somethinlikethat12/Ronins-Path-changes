@@ -562,11 +562,32 @@ class Game {
     }
 
     // ================= combat API =================
+    enemyGroup(e) {
+        const p = e.target || this.player;
+        return this.enemies.filter(o => !o.elite && o.aware && o.st !== 'DEAD'
+            && o.distTo(p) < 700 && o.distTo(e) < 650);
+    }
+
+    enemyPressured(e) {
+        if (e.pressureT > 0) return true;
+        const p = e.target || this.player, d = e.distTo(p);
+        if (d > 190 + e.r || p.st === 'DEAD' || p.untargetable()) return false;
+        return Math.abs(U.angDiff(p.facing, p.angleTo(e))) < 0.9
+            && (p.st === 'ATTACK' || p.st === 'ART' || p.st === 'THROW');
+    }
+
+    enemyShouldHangBack(e) {
+        if (e.elite || e.hasToken || this.enemyPressured(e)) return false;
+        const group = this.enemyGroup(e);
+        return group.length === 2 && group.some(o => o !== e && o.hasToken);
+    }
+
     requestToken(e) {
         if (e.elite) return true;
-        let n = 0;
-        for (const o of this.enemies) if (o !== e && o.hasToken && !o.elite) n++;
-        return n < 2;
+        const group = this.enemyGroup(e);
+        const attackers = group.filter(o => o !== e && o.hasToken);
+        if (group.length === 2 && attackers.length > 0) return this.enemyPressured(e);
+        return attackers.length < 2;
     }
 
     engageBoss(e) {
