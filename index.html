@@ -22,7 +22,12 @@
             width: 100%; padding: 13px 18px; font: bold 19px Georgia, serif; color: #f4e9d8; cursor: pointer;
             background: linear-gradient(#5a1f1b, #3a1412); border: 1px solid #a7533f; border-radius: 4px;
         }
+        #menu a.feedback {
+            width: 100%; box-sizing: border-box; padding: 13px 18px; font: bold 19px Georgia, serif; color: #f4e9d8;
+            text-decoration: none; background: linear-gradient(#5a1f1b, #3a1412); border: 1px solid #a7533f; border-radius: 4px;
+        }
         #menu button:hover:not(:disabled) { background: linear-gradient(#7a2922, #4d1915); border-color: #e0a15f; }
+        #menu a.feedback:hover, #menu a.feedback:focus-visible { background: linear-gradient(#7a2922, #4d1915); border-color: #e0a15f; }
         #menu button:disabled { opacity: 0.45; cursor: default; }
         #menu button.back { background: transparent; border-color: #5d4a3c; font-size: 16px; width: auto; padding: 8px 26px; }
         #menu input {
@@ -59,6 +64,8 @@
             <button id="btn-host">Host Online Duel</button>
             <button id="btn-join">Join Online Duel</button>
             <p class="note">Co-op is for a party of friends in the same world. The host's journey saves progress; guests join for this session. Duels are 1v1 or free-for-all for up to eight swordsmen.</p>
+            <a class="feedback" href="https://github.com/harpermoor/Ronins-Path/issues/new" target="_blank" rel="noopener noreferrer">Send Feedback</a>
+            <p class="note">Opens GitHub Issues; feedback is public.</p>
         </div>
         <div class="panel" id="menu-host" hidden>
             <h2>Host a Duel</h2>
