@@ -26,8 +26,9 @@
             background: linear-gradient(#5a1f1b, #3a1412); border: 1px solid #a7533f; border-radius: 4px;
         }
         #menu a.feedback {
-            width: 100%; box-sizing: border-box; padding: 13px 18px; font: bold 19px Georgia, serif; color: #f4e9d8;
-            text-decoration: none; background: linear-gradient(#5a1f1b, #3a1412); border: 1px solid #a7533f; border-radius: 4px;
+            position: fixed; right: 20px; bottom: 20px; z-index: 2; padding: 10px 16px;
+            font: bold 16px Georgia, serif; color: #f4e9d8; text-decoration: none;
+            background: linear-gradient(#5a1f1b, #3a1412); border: 1px solid #a7533f; border-radius: 4px;
         }
         #menu button:hover:not(:disabled) { background: linear-gradient(#7a2922, #4d1915); border-color: #e0a15f; }
         #menu a.feedback:hover, #menu a.feedback:focus-visible { background: linear-gradient(#7a2922, #4d1915); border-color: #e0a15f; }
@@ -54,7 +55,7 @@
         #menu .settings input[type="checkbox"] { width: auto; }
         #menu .settings input:disabled { opacity: 0.4; }
         #pause-feedback {
-            position: fixed; z-index: 2; left: 50%; bottom: 20px; transform: translateX(-50%);
+            position: fixed; z-index: 2; right: 20px; bottom: 20px;
             padding: 10px 18px; font: bold 16px Georgia, serif; color: #f4e9d8; text-decoration: none;
             background: linear-gradient(#5a1f1b, #3a1412); border: 1px solid #a7533f; border-radius: 4px;
         }
@@ -69,13 +70,12 @@
             <h1>RONIN'S PATH</h1>
             <div class="kanji">浪人の道</div>
             <button id="btn-journey">Begin Journey</button>
-            <a class="feedback" href="https://github.com/harpermoor/Ronins-Path/issues/new" target="_blank" rel="noopener noreferrer">Send Feedback</a>
-            <p class="note">Opens GitHub Issues; feedback is public.</p>
             <button id="btn-host-coop">Host Co-op Journey</button>
             <button id="btn-join-coop">Join Co-op Journey</button>
             <button id="btn-host">Host Online Duel</button>
             <button id="btn-join">Join Online Duel</button>
             <p class="note">Co-op is for a party of friends in the same world. The host's journey saves progress; guests join for this session. Duels are 1v1 or free-for-all for up to eight swordsmen.</p>
+            <a class="feedback" href="https://github.com/harpermoor/Ronins-Path/issues/new" target="_blank" rel="noopener noreferrer" title="Opens public GitHub Issues">Send Feedback</a>
         </div>
         <div class="panel" id="menu-host" hidden>
             <h2>Host a Duel</h2>
