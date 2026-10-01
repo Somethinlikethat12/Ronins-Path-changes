@@ -81,6 +81,8 @@ class Player extends Actor {
         this.cur = null;
         this.hitSet = new Set();
         this.comboGrace = 0;
+        this.poise = 0;
+        this.poiseLeft = 0;
         // guard / deflect
         this.guarding = false;
         this.guardStart = -99;
@@ -158,6 +160,7 @@ class Player extends Actor {
         this.dodgeIframes = s.iframes;
         this.dragonFlash = s.dragonFlash;
         this.lastStand = s.lastStand;
+        this.poise = s.poise;
         this.dragonDamage = 58 * s.dmg * s.artDmg;
         this.sword = lo.swordDef();
         this.comboAtk = (this.sword.combo || P_COMBO).map((a, i) => {
@@ -165,8 +168,8 @@ class Player extends Actor {
             b.heavy = i === 2;
             return b;
         });
-        const heavy = this.sword.id === 'hammer' || this.sword.id === 'axe'
-            ? new Attack('heavy-smash', 0.72, 0.18, 0.68, 110, 110, 36, 38, 350) : P_STAB;
+        const heavy = weaponType(this.sword) === 'hammer' || weaponType(this.sword) === 'axe'
+            ? new Attack('heavy-smash', 0.72, 0.18, 0.68, 110, 110, 36, 38, 350).markPerilous() : P_STAB;
         this.stabAtk = scaledAttack(heavy, s);
         this.throwAtk = new Attack(this.throwable.id, 0, 0, 0, this.throwable.range, 0,
             this.throwable.damage * s.dmg, this.throwable.posture * s.post, 0);
@@ -418,6 +421,8 @@ class Player extends Actor {
         this.stabAttack = false;
         this.swingId++;
         this.cur = this.comboAtk[i];
+        // heavy weapons keep swinging through hits worth up to this much damage; the finisher holds firmer
+        this.poiseLeft = this.poise * (i === 2 ? 1.5 : 1);
         this.hitSet.clear();
         this.swingSign = i === 1 ? -1 : 1;
         this.guarding = false;
@@ -432,6 +437,7 @@ class Player extends Actor {
         this.stabAttack = true;
         this.swingId++;
         this.cur = this.stabAtk;
+        this.poiseLeft = this.poise * 1.5;
         this.hitSet.clear();
         this.swingSign = 1;
         this.guarding = false;
@@ -456,7 +462,10 @@ class Player extends Actor {
             } else if (this.stT >= cur.windup) {
                 this.phase = 1;
                 this.stT = 0;
-                g.sfx.play(cur.perilous || this.combo === 2 ? 'HEAVY' : 'SLASH');
+                const swingSound = weaponType(this.sword) === 'spear' ? 'THRUST'
+                    : weaponType(this.sword) === 'hammer' ? 'HAMMER_SWING'
+                        : cur.perilous || this.combo === 2 ? 'HEAVY' : 'SLASH';
+                g.sfx.play(swingSound);
                 if (cur.thrust) {
                     const fx = Math.cos(this.facing), fy = Math.sin(this.facing);
                     const tx = this.x + fx * (cur.range + 10), ty = this.y + fy * (cur.range + 10);
@@ -470,8 +479,15 @@ class Player extends Actor {
                     g.shake(8);
                     g.zoomKick(0.06);
                 } else {
-                    const start = this.facing + this.swingSign * cur.arc / 2;
-                    g.fx.slash(this.x, this.y, cur.range * 0.82, start, -this.swingSign * cur.arc, 0.2, this.combo === 2 ? 9 : 6, rgb(180, 220, 255));
+                    if (weaponType(this.sword) === 'spear') {
+                        const fx = Math.cos(this.facing), fy = Math.sin(this.facing);
+                        g.fx.thrust(this.x + fx * this.r, this.y + fy * this.r, this.facing,
+                            cur.range * 0.82, 0.2, this.combo === 2 ? 20 : 14, rgb(180, 220, 255));
+                    } else {
+                        const start = this.facing + this.swingSign * cur.arc / 2;
+                        g.fx.slash(this.x, this.y, cur.range * 0.82, start, -this.swingSign * cur.arc, 0.2,
+                            this.combo === 2 ? 9 : 6, rgb(180, 220, 255));
+                    }
                 }
             }
         } else if (this.phase === 1) {
@@ -504,6 +520,11 @@ class Player extends Actor {
 
     tryArt(aimAng) {
         const g = this.g, a = this.art;
+        if (!artMatchesWeapon(a, this.sword)) {
+            g.fx.text(a.name + ' requires the ' + findItem(SWORDS, a.weapon).name, this.x, this.y - 40, rgb(255, 190, 115), 13);
+            g.sfx.play('BLOCK');
+            return;
+        }
         if (this.artCharges < a.cost) {
             g.fx.text('Deflect attacks to charge ' + a.name, this.x, this.y - 40, rgb(255, 215, 110), 13);
             return;
@@ -545,12 +566,29 @@ class Player extends Actor {
             this.artAtk = atk;
             this.artAtkEnd = h.t + atk.active;
             this.hitSet.clear();
-            g.sfx.play('HEAVY');
+            g.sfx.play(a.motion === 'thrust' ? 'THRUST' : a.motion === 'slam' ? 'HAMMER_SWING' : 'HEAVY');
             const sweep = Math.min(atk.arc, TAU), f = this.facing;
-            g.fx.slash(this.x, this.y, atk.range * 0.85, f + sweep / 2, -sweep, 0.25, 9, a.color);
-            if (h.line) g.fx.line(this.x, this.y, this.x + Math.cos(f) * atk.range, this.y + Math.sin(f) * atk.range, 0.3, 4, a.color);
+            if (a.motion === 'thrust') {
+                g.fx.thrust(this.x + Math.cos(f) * this.r, this.y + Math.sin(f) * this.r,
+                    f, atk.range * 0.9, 0.24, 19, a.color);
+                if (h.line) g.fx.sparks(this.x + Math.cos(f) * atk.range, this.y + Math.sin(f) * atk.range,
+                    f + Math.PI, 0.45, 14, 420, a.color);
+            } else if (a.motion === 'slam') {
+                g.fx.slash(this.x, this.y, atk.range * 0.78, f + sweep / 2, -sweep, 0.3, 15, a.color);
+                g.fx.ring(this.x + Math.cos(f) * 34, this.y + Math.sin(f) * 34, 8, atk.range, 0.42, 6, a.color);
+                g.fx.sparks(this.x + Math.cos(f) * 48, this.y + Math.sin(f) * 48, f + Math.PI / 2,
+                    2.2, 18, 300, rgb(225, 205, 165));
+                g.shake(10);
+                g.hitstop(0.085);
+                g.zoomKick(0.05);
+            } else {
+                g.fx.slash(this.x, this.y, atk.range * 0.85, f + sweep / 2, -sweep, 0.25, 9, a.color);
+            }
+            if (h.line && a.motion !== 'thrust') {
+                g.fx.line(this.x, this.y, this.x + Math.cos(f) * atk.range, this.y + Math.sin(f) * atk.range, 0.3, 4, a.color);
+            }
             if (a.recover) this.posture = Math.max(0, this.posture - a.recover);
-            g.shake(5);
+            if (a.motion !== 'slam') g.shake(a.motion === 'thrust' ? 3 : 5);
         }
         if (this.artAtk !== null) {
             if (t < this.artAtkEnd) g.playerHitCheck(this, this.artAtk);
@@ -746,9 +784,25 @@ class Player extends Actor {
         this.posture = Math.min(this.maxPosture, this.posture + post * 0.35);
         this.postureCd = 1.0;
         this.hurtFlash = 0.3;
+        this.deflectStreak = 0;
+        // poise: a heavy weapon mid-windup or mid-swing takes the blow and keeps going (perilous attacks still interrupt)
+        if (!perilous && this.st === 'ATTACK' && this.phase <= 1 && this.poiseLeft > 0 && dmg <= this.poiseLeft) {
+            this.poiseLeft -= dmg;
+            this.invuln = 0.2;
+            this.move(g.world, -Math.cos(ang) * 4, -Math.sin(ang) * 4);
+            g.fx.blood(this.x, this.y, ang + Math.PI, 7, 200);
+            g.fx.sparks(cx, cy, ang, 1.2, 10, 300, rgb(255, 170, 90));
+            g.fx.ring(this.x, this.y, this.r, this.r + 16, 0.2, 3, rgb(255, 190, 120));
+            g.fx.text('UNFLINCHING', this.x, this.y - 42, rgb(255, 190, 120), 14);
+            g.sfx.play('HURT');
+            g.shake(5);
+            g.hitstop(0.04);
+            g.flash(rgb(200, 0, 0), 0.12);
+            if (this.hp <= 0) this.die();
+            return P_HIT;
+        }
         this.invuln = 0.35;
         this.guarding = false;
-        this.deflectStreak = 0;
         this.st = 'STAGGER';
         this.stT = 0;
         this.staggerDur = perilous ? 0.55 : 0.3;
@@ -824,20 +878,109 @@ class Player extends Actor {
             g2.restore();
             return;
         }
-        // sword pose
-        let handRel = 0.9, blade = facing + 0.55, bodyFacing = facing;
+        let handRel = 0.9, handForward = 0, bodyLeanX = 0, bodyLeanY = 0;
+        let blade = facing + 0.55, bodyFacing = facing;
         if (st === 'ATTACK') {
             const cur = this.cur, ss = this.swingSign;
             const a0 = ss * cur.arc / 2, a1 = -ss * cur.arc / 2;
-            const rel = this.phase === 0 ? a0 + ss * 0.35 * (this.stT / cur.windup)
-                : this.phase === 1 ? U.lerp(a0, a1, Math.min(1, this.stT / cur.active)) : a1;
-            blade = facing + rel;
-            handRel = rel * 0.6;
+            if (weaponType(this.sword) === 'spear') {
+                handRel = 0;
+                blade = facing;
+                const extension = this.combo === 2 ? 46 : 30;
+                if (this.phase === 0) {
+                    const t = U.clamp(this.stT / cur.windup, 0, 1);
+                    handForward = -18 * (1 - t * t * (3 - 2 * t));
+                } else if (this.phase === 1) {
+                    const t = U.clamp(this.stT / cur.active, 0, 1);
+                    handForward = extension * t * t * (3 - 2 * t);
+                } else {
+                    const t = U.clamp(this.stT / Math.min(cur.recovery, 0.3), 0, 1);
+                    handForward = extension * (1 - t * t * (3 - 2 * t));
+                }
+                const bodyDrive = handForward > 0 ? U.clamp(handForward / extension, 0, 1) : 0;
+                bodyLeanX = Math.cos(facing) * bodyDrive * (this.combo === 2 ? 7 : 4);
+                bodyLeanY = Math.sin(facing) * bodyDrive * (this.combo === 2 ? 7 : 4);
+            } else if (weaponType(this.sword) === 'hammer') {
+                let rel;
+                const finisher = this.combo === 2;
+                if (this.phase === 0) {
+                    const t = U.clamp(this.stT / cur.windup, 0, 1);
+                    rel = U.lerp(ss * (finisher ? 2.9 : 2.5), a0, t * t * (3 - 2 * t));
+                } else if (this.phase === 1) {
+                    const t = U.clamp(this.stT / cur.active, 0, 1);
+                    const swing = t * t * (3 - 2 * t);
+                    rel = U.lerp(a0, a1, swing) - ss * (finisher ? 0.48 : 0.2) * Math.sin(Math.PI * t);
+                } else rel = a1;
+                blade = facing + rel;
+                handRel = rel * 0.58;
+                bodyFacing = facing + rel * 0.2;
+                let lean;
+                if (this.phase === 0) lean = 0;
+                else if (this.phase === 1) {
+                    const t = U.clamp(this.stT / cur.active, 0, 1);
+                    lean = Math.sin(Math.PI * t) * 0.65 + t * 0.35;
+                } else {
+                    const t = U.clamp(this.stT / Math.min(cur.recovery, 0.3), 0, 1);
+                    lean = 0.35 * (1 - t * t * (3 - 2 * t));
+                }
+                const tangent = blade - ss * Math.PI / 2;
+                const weight = finisher ? 13 : 10;
+                bodyLeanX = Math.cos(tangent) * lean * weight;
+                bodyLeanY = Math.sin(tangent) * lean * weight;
+            } else {
+                const finisher = this.combo === 2;
+                let rel;
+                if (this.phase === 0) {
+                    const t = U.clamp(this.stT / cur.windup, 0, 1);
+                    rel = a0 + ss * (finisher ? 0.45 : 0.35) * (1 - t);
+                } else if (this.phase === 1) {
+                    const t = U.clamp(this.stT / cur.active, 0, 1);
+                    const swing = finisher ? t * t * (3 - 2 * t) : t;
+                    rel = U.lerp(a0, a1, swing) - ss * (finisher ? 0.35 : 0) * Math.sin(Math.PI * t);
+                } else {
+                    const t = U.clamp(this.stT / Math.min(cur.recovery, 0.25), 0, 1);
+                    rel = a1 - ss * (finisher ? 0.35 * (1 - t * t * (3 - 2 * t)) : 0);
+                }
+                blade = facing + rel;
+                handRel = rel * 0.6;
+                if (finisher) {
+                    let lean;
+                    if (this.phase === 0) lean = 0;
+                    else if (this.phase === 1) {
+                        const t = U.clamp(this.stT / cur.active, 0, 1);
+                        lean = Math.sin(Math.PI * t) * 0.55 + t * 0.25;
+                    } else {
+                        const t = U.clamp(this.stT / Math.min(cur.recovery, 0.25), 0, 1);
+                        lean = 0.25 * (1 - t * t * (3 - 2 * t));
+                    }
+                    const tangent = blade - ss * Math.PI / 2;
+                    bodyLeanX = Math.cos(tangent) * lean * 7;
+                    bodyLeanY = Math.sin(tangent) * lean * 7;
+                }
+            }
         } else if (st === 'ART') {
             const a = this.curArt, rel = a.blade(this.stT);
-            blade = facing + rel;
-            handRel = a.spin ? rel : rel * 0.6;
-            if (a.spin) bodyFacing = facing + rel - 0.9;
+            if (a.motion === 'thrust') {
+                handRel = 0;
+                blade = facing;
+                const jab = this.artIdx > 0 && this.stT >= a.hits[1].t - 0.14 ? 1 : 0;
+                const cycleT = jab ? U.clamp((this.stT - (a.hits[1].t - 0.14)) / 0.16, 0, 1)
+                    : U.clamp(this.stT / 0.22, 0, 1);
+                handForward = U.lerp(-18, 48, cycleT * cycleT * (3 - 2 * cycleT));
+                bodyLeanX = Math.cos(facing) * 6 * U.clamp(handForward / 48, 0, 1);
+                bodyLeanY = Math.sin(facing) * 6 * U.clamp(handForward / 48, 0, 1);
+            } else if (a.motion === 'slam') {
+                blade = facing + rel;
+                handRel = rel * 0.58;
+                bodyFacing = facing + rel * 0.22;
+                const drive = this.stT < a.hits[0].t ? 0 : U.clamp((this.stT - a.hits[0].t) / 0.12, 0, 1);
+                bodyLeanX = Math.cos(facing) * drive * 14;
+                bodyLeanY = Math.sin(facing) * drive * 14;
+            } else {
+                blade = facing + rel;
+                handRel = a.spin ? rel : rel * 0.6;
+                if (a.spin) bodyFacing = facing + rel - 0.9;
+            }
         } else if (st === 'FREE' && this.guarding) {
             handRel = 0.15;
             blade = facing - 1.4;
@@ -855,7 +998,8 @@ class Player extends Actor {
         }
 
         Draw.shadow(g2, x, y, r);
-        Draw.scarf(g2, x, y, r, bodyFacing, this.scarf, lo.color('scarf'));
+        const bodyX = x + bodyLeanX, bodyY = y + bodyLeanY;
+        Draw.scarf(g2, bodyX, bodyY, r, bodyFacing, this.scarf, lo.color('scarf'));
         let robe = lo.color('robe'), shoulder = lo.armorDef().shoulder;
         if (this.hurtFlash > 0.15) {
             robe = WHITE;
@@ -867,9 +1011,10 @@ class Player extends Actor {
             g2.fillStyle = st === 'DODGE' ? 'rgba(160,190,255,0.235)' : css(U.alpha(this.curArt.color, 0.3));
             fillCircle(g2, x - this.vx * 0.03, y - this.vy * 0.03, r * 1.4);
         }
-        Draw.body(g2, x, y, r, bodyFacing, robe, shoulder, lo.color('hat'), lo.look.hatStyle, this.walkAnim);
+        Draw.body(g2, bodyX, bodyY, r, bodyFacing, robe, shoulder, lo.color('hat'), lo.look.hatStyle, this.walkAnim);
 
-        const hx = x + Math.cos(facing + handRel) * r * 0.9, hy = y + Math.sin(facing + handRel) * r * 0.9;
+        const hx = bodyX + Math.cos(facing + handRel) * r * 0.9 + Math.cos(facing) * handForward;
+        const hy = bodyY + Math.sin(facing + handRel) * r * 0.9 + Math.sin(facing) * handForward;
         const sword = this.sword;
         Draw.weapon(g2, hx, hy, blade, sword, this.guardFlash > 0 ? rgb(255, 230, 150) : sword.color);
         if (st === 'FREE' && this.guarding && this.g.time - this.guardStart <= this.guardWindow) {

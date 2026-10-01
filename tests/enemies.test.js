@@ -1,0 +1,210 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+
+const context = vm.createContext({ console });
+for (const name of ['util', 'skills', 'settings', 'world', 'enemy', 'game', 'save']) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name + '.js'), 'utf8'), context);
+}
+const { Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE } = vm.runInContext(
+    '({ Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE })', context);
+
+const game = { difficulty: difficultyFor(null, 1, 0) };
+const types = [
+    ['RONIN', 82, 82, 'backhand'],
+    ['SPEAR', 72, 72, 'hook'],
+    ['BRUTE', 235, 176, 'uppercut'],
+];
+for (const [type, hp, posture, move] of types) {
+    const enemy = new Enemy(game, type, 100, 100, false, null, 7);
+    assert.equal(enemy.maxHp, hp);
+    assert.equal(enemy.maxPosture, posture);
+    assert.equal(enemy.dmgScale, ENEMY_DAMAGE_SCALE);
+    assert(enemy.combos.some(combo => combo.some(atk => atk.name === move)));
+    assert(enemy.combos.every(combo => combo.every(atk => atk && atk.windup > 0 && atk.recovery > 0)));
+    const vet = new Enemy(game, type, 100, 100, false, null, 7, true);
+    const elite = new Enemy(game, type, 100, 100, true, null, 7);
+    assert(vet.combos.some(combo => combo.some(atk => atk.name === move)));
+    assert(elite.combos.some(combo => combo.some(atk => atk.name === move)));
+    assert(vet.combos.length > enemy.combos.length);
+    assert(elite.combos.length > vet.combos.length);
+}
+for (const move of [EA.R_BACKHAND, EA.SP_HOOK, EA.BR_UPPERCUT]) {
+    assert(move.windup >= 0.35);
+    assert(move.arc > 0);
+    assert.equal(move.perilous, false);
+}
+
+const scaled = { difficulty: difficultyFor({ enemyScale: 25 }, 2, 2) };
+const scaledEnemy = new Enemy(scaled, 'SPEAR', 100, 100, false, null, 7);
+assert.equal(scaledEnemy.maxHp, 72 * scaled.difficulty.enemyHp);
+assert.equal(scaledEnemy.maxPosture, 72 * scaled.difficulty.enemyPosture);
+assert.equal(scaledEnemy.dmgScale, ENEMY_DAMAGE_SCALE * scaled.difficulty.enemyDmg);
+
+const live = { coop: { settings: {} }, coopSettings: { enemyScale: 25, countScale: 25 },
+    difficulty: difficultyFor({ enemyScale: 25, countScale: 25 }, 2, 0), partySize: 2, ngPlus: 0,
+    enemies: [new Enemy({ difficulty: difficultyFor({ enemyScale: 25 }, 2, 0) }, 'RONIN', 100, 100, false, null, 7)] };
+Game.prototype.applyCoopSettings.call(live, { enemyScale: 50, countScale: 25 });
+assert.equal(live.enemies[0].dmgScale, ENEMY_DAMAGE_SCALE * live.difficulty.enemyDmg);
+assert.equal(live.enemies[0].maxHp, 82 * live.difficulty.enemyHp);
+
+const eliteNames = vm.runInContext('ELITES', context);
+const supers = vm.runInContext('ELITE_SUPERS', context);
+assert.equal(new Set(supers.map(atk => atk.name)).size, eliteNames.length);
+for (const [i, [name, type]] of eliteNames.entries()) {
+    const elite = new Enemy(game, type, 4000, 4000, true, name, 7);
+    const superCombos = elite.combos.filter(combo => combo.some(atk => atk.name === supers[i].name));
+    assert(elite.combos.length >= new Enemy(game, type, 4000, 4000, true, null, 7).combos.length + 2);
+    assert(superCombos.length >= 2);
+    assert(elite.gap.some(combo => combo.some(atk => atk.name === supers[i].name)));
+    assert(superCombos.every(combo => combo.length >= 2));
+    const attack = superCombos[0].find(atk => atk.name === supers[i].name);
+    assert(attack.perilous && attack.windup > 0.7 && attack.recovery > 0.6);
+    const events = [];
+    elite.g = { fx: { text: (...args) => events.push(['text', args]), ring: (...args) => events.push(['ring', args]) },
+        sfx: { play: name => events.push(['sound', name]) } };
+    elite.combo = [attack];
+    elite.comboIdx = 0;
+    elite.beginAttack(0.55);
+    assert(elite.stDur >= attack.windup * 0.88);
+    assert(events.some(([kind, args]) => kind === 'text' && args[0] === attack.name.toUpperCase()));
+    assert(events.some(([kind, name]) => kind === 'sound' && name === 'PERILOUS'));
+}
+const daimyo = new Enemy(game, 'RONIN', 4000, 4000, true, 'The Ashen Daimyo', 7, true, true);
+assert(daimyo.combos.some(combo => combo.some(atk => atk.name === EA.DAIMYO_ASHFALL.name)));
+assert(daimyo.gap.some(combo => combo.some(atk => atk.name === EA.DAIMYO_ASHFALL.name)));
+assert(EA.DAIMYO_ASHFALL.perilous && !EA.DAIMYO_ASHFALL.thrust);
+assert(daimyo.dodgeChance > 0);
+const ordinary = new Enemy(game, 'RONIN', 4000, 4000, false, null, 7);
+for (const foe of [daimyo, ...eliteNames.map(([name, type]) => new Enemy(game, type, 4000, 4000, true, name, 7))]) {
+    foe.rnd.nextDouble = () => 0;
+    foe.target = { st: 'HEAL', guarding: false };
+    assert.equal(foe.pickCombo()[0].windup,
+        Math.min(...foe.combos.filter(c => c.length > 1).map(c => c[0].windup)));
+    assert(foe.pickGap().length > 1);
+    foe.target = { st: 'FREE', guarding: true };
+    assert(foe.pickCombo().some(atk => atk.perilous));
+    foe.target.guarding = false;
+    foe.lives = 1;
+    const signature = foe.boss ? EA.DAIMYO_ASHFALL : supers[foe.eliteStyle];
+    assert.equal(foe.pickCombo().at(-1).name, signature.name);
+}
+ordinary.rnd.nextDouble = () => 0;
+ordinary.target = { st: 'HEAL', guarding: true };
+assert.equal(ordinary.pickCombo(), ordinary.combos[0]);
+
+function spawnFixture() {
+    const world = { camps: [
+        { x: 4000, y: 4000, r: 300, elite: true, eliteType: 'RONIN', eliteName: eliteNames[0][0], members: [], cleared: false },
+        { x: 6000, y: 6000, r: 240, elite: false, members: [], cleared: false },
+    ], shrines: [{ x: 250, y: 250 }], resolve() {},
+    nearCamp: () => Infinity, nearShrine: () => Infinity };
+    const fixture = { world, rnd: vm.runInContext('new Rng(19)', context), enemies: [], totalElites: 0,
+        difficulty: difficultyFor(null, 1, 0), addEnemy: Game.prototype.addEnemy,
+        randomGrunt: Game.prototype.randomGrunt, pickType: Game.prototype.pickType };
+    Game.prototype.spawnEnemies.call(fixture);
+    return fixture;
+}
+const spawned = spawnFixture();
+assert.equal(spawned.totalElites, 1);
+assert.equal(spawned.world.camps[0].members.length, 1);
+assert(spawned.world.camps[0].members[0].elite);
+assert.equal(spawned.enemies[0].legacyIndex, 0);
+assert.equal(spawned.enemies[1].legacyIndex, 2);
+assert.equal(spawned.enemies[1].previousIndex, 1);
+assert(spawned.world.camps[1].members.length >= 1 && spawned.world.camps[1].members.length <= 2);
+assert(spawned.world.camps[1].members.every(e => e.vet));
+const wanderers = spawned.enemies.filter(e => e.camp === null);
+assert(wanderers.length > 0);
+assert(spawned.world.camps[1].members.length < wanderers[0].legacyIndex - 2);
+assert(wanderers.every(e =>
+    Math.hypot(e.x - 4000, e.y - 4000) >= 1050));
+
+const SaveGame = vm.runInContext('SaveGame', context);
+assert(SaveGame.valid({ v: 1, seed: 19, player: {} }));
+assert(SaveGame.valid({ v: 2, seed: 19, player: {} }));
+assert(SaveGame.valid({ v: 3, seed: 19, player: {} }));
+const savedGame = spawnFixture();
+savedGame.player = { maxHp: 100, maxGourds: 3, maxThrows: 5, x: 0, y: 0, applyLoadout() {} };
+savedGame.loadout = { apply() {} };
+savedGame.skills = new Set();
+savedGame.world.resolve = () => {};
+SaveGame.apply(savedGame, { v: 1, dead: [0, 1, 2], camps: [false, false], player: {} });
+assert.equal(savedGame.enemies[0].st, 'DEAD');
+assert.equal(savedGame.enemies[1].st, 'DEAD');
+assert(savedGame.world.camps[0].cleared);
+const currentGame = spawnFixture();
+currentGame.player = { maxHp: 100, maxGourds: 3, maxThrows: 5, x: 0, y: 0, applyLoadout() {} };
+currentGame.loadout = { apply() {} };
+currentGame.skills = new Set();
+const shifted = currentGame.enemies.find((e, i) => e.previousIndex !== i);
+assert(shifted);
+SaveGame.apply(currentGame, { v: 2, dead: [shifted.previousIndex], player: {} });
+assert.notEqual(currentGame.enemies[0].st, 'DEAD');
+assert.equal(shifted.st, 'DEAD');
+const latestGame = spawnFixture();
+latestGame.player = { maxHp: 100, maxGourds: 3, maxThrows: 5, x: 0, y: 0, applyLoadout() {} };
+latestGame.loadout = { apply() {} };
+latestGame.skills = new Set();
+SaveGame.apply(latestGame, { v: 3, dead: [1], player: {} });
+assert.notEqual(latestGame.enemies[0].st, 'DEAD');
+assert.equal(latestGame.enemies[1].st, 'DEAD');
+assert.equal(vm.runInContext('SAVE_VERSION', context), 3);
+
+const combatGame = { difficulty: difficultyFor(null, 1, 0), time: 0,
+    fx: new Proxy({}, { get: () => () => {} }), sfx: { play() {} },
+    hitstop() {}, shake() {}, slowmo() {}, onEnemyKilled() {}, onPostureBreak() {} };
+const attacker = { x: 70, y: 100, ki: 0, angleTo: target => Math.atan2(target.y - 100, target.x - 70) };
+const strike = { damage: 12, posture: 5, art: false, heavy: false, pierce: false };
+for (const type of ['RONIN', 'SPEAR', 'BRUTE']) {
+    const foe = new Enemy(combatGame, type, 100, 100, false, null, 7);
+    foe.aware = true;
+    foe.startCombo([foe.combos[0][0], foe.combos[0][0]], 1);
+    const hp = foe.hp, dur = foe.stDur;
+    foe.takeHit(attacker, strike);
+    assert.equal(foe.st, 'WINDUP');
+    assert.equal(foe.stDur, dur);
+    assert.equal(foe.hp, hp - strike.damage);
+    foe.comboIdx = 1;
+    foe.beginAttack(1);
+    assert.equal(foe.attackHitsTaken, 0);
+    foe.takeHit(attacker, strike);
+    assert.equal(foe.st, 'WINDUP');
+}
+const ronin = new Enemy(combatGame, 'RONIN', 100, 100, false, null, 7);
+ronin.aware = true;
+ronin.startCombo([ronin.combos[0][0]], 1);
+ronin.takeHit(attacker, strike);
+ronin.takeHit(attacker, strike);
+assert.equal(ronin.st, 'STUN');
+const active = new Enemy(combatGame, 'SPEAR', 100, 100, false, null, 7);
+active.aware = true;
+active.startCombo([active.combos[0][0]], 1);
+active.setSt('ACTIVE');
+active.takeHit(attacker, strike);
+assert.equal(active.st, 'ACTIVE');
+active.takeHit(attacker, strike);
+assert.equal(active.st, 'STUN');
+const recovering = new Enemy(combatGame, 'RONIN', 100, 100, false, null, 7);
+recovering.aware = true;
+recovering.startCombo([recovering.combos[0][0]], 1);
+recovering.setSt('RECOVER');
+recovering.takeHit(attacker, strike);
+assert.equal(recovering.st, 'STUN');
+const broken = new Enemy(combatGame, 'RONIN', 100, 100, false, null, 7);
+broken.aware = true;
+broken.startCombo([broken.combos[0][0]], 1);
+broken.posture = broken.maxPosture - 2;
+broken.takeHit(attacker, strike);
+assert.equal(broken.st, 'BROKEN');
+const fatal = new Enemy(combatGame, 'SPEAR', 100, 100, false, null, 7);
+fatal.aware = true;
+fatal.startCombo([fatal.combos[0][0]], 1);
+fatal.hp = strike.damage;
+fatal.takeHit(attacker, strike);
+assert.equal(fatal.st, 'DEAD');
+
+console.log('Enemy variation and scaling checks passed');

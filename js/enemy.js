@@ -7,6 +7,7 @@ function withDash(a, speed) {
 }
 
 // ---- move sets ----
+const ENEMY_DAMAGE_SCALE = 1.12;
 const EA = {
     R_A: new Attack('slash', .45, .12, .45, 70, 140, 14, 18, 240),
     R_B: new Attack('slash2', .30, .12, .50, 70, 140, 14, 18, 240),
@@ -14,11 +15,14 @@ const EA = {
     R_DELAY: new Attack('delayed', 1.05, .14, .60, 82, 180, 22, 30, 300),
     R_THRUST: new Attack('thrust', .70, .18, .75, 118, 30, 26, 10, 560).markPerilous().markThrust(),
     R_FAST: new Attack('quick', .24, .10, .35, 66, 130, 10, 14, 220),
+    R_BACKHAND: new Attack('backhand', .38, .12, .48, 76, 165, 16, 20, 230),
     SP_T1: new Attack('thrust', .50, .14, .50, 118, 26, 13, 16, 170).markThrust(),
     SP_T2: new Attack('thrust2', .28, .14, .50, 118, 26, 13, 16, 170).markThrust(),
+    SP_HOOK: new Attack('hook', .52, .15, .56, 104, 115, 17, 22, 110),
     SP_SWEEP: new Attack('sweep', .60, .16, .60, 108, 200, 16, 22, 70),
     SP_PER: new Attack('lunge', .75, .20, .80, 150, 24, 30, 10, 620).markPerilous().markThrust(),
     BR_SMASH: new Attack('smash', .85, .18, .90, 108, 160, 30, 42, 130),
+    BR_UPPERCUT: new Attack('uppercut', .68, .16, .76, 104, 95, 25, 32, 160),
     BR_SWEEP: new Attack('sweep', .55, .16, .70, 112, 190, 22, 30, 80),
     BR_PER: new Attack('crush', 1.0, .25, 1.0, 130, 300, 38, 0, 90).markPerilous(),
     R_DASH: withDash(new Attack('dash', .50, .12, .55, 80, 120, 18, 22, 320), 430),
@@ -29,7 +33,14 @@ const EA = {
     SP_FLURRY: new Attack('flurry', .18, .10, .30, 116, 22, 8, 10, 120).markThrust(),
     BR_CHARGE: withDash(new Attack('charge', .70, .20, .90, 70, 100, 26, 40, 500), 480),
     BR_STOMP: new Attack('stomp', .80, .20, .90, 124, 360, 26, 0, 0).markPerilous(),
+    KAGEMARU_VANISH: withDash(new Attack('shadow pierce', .85, .18, .85, 145, 30, 32, 18, 470).markPerilous().markThrust(), 380),
+    GOZU_QUAKE: new Attack('earthsplitter', 1.15, .25, 1.1, 145, 300, 42, 8, 110).markPerilous(),
+    TOMOE_LANCE: withDash(new Attack('crimson lance', .95, .20, .9, 175, 22, 35, 18, 620).markPerilous().markThrust(), 410),
+    RYUSEI_CROSS: new Attack('fallen star', 1.0, .20, 1.0, 110, 310, 35, 35, 200).markPerilous(),
+    OKAMI_CRESCENT: new Attack('hollow crescent', 1.05, .22, 1.05, 132, 320, 33, 22, 120).markPerilous(),
+    DAIMYO_ASHFALL: withDash(new Attack('ashfall', 1.15, .23, 1.1, 152, 280, 44, 36, 290).markPerilous(), 340),
 };
+const ELITE_SUPERS = [EA.KAGEMARU_VANISH, EA.GOZU_QUAKE, EA.TOMOE_LANCE, EA.RYUSEI_CROSS, EA.OKAMI_CRESCENT];
 
 // Enemy types: 'RONIN' | 'SPEAR' | 'BRUTE'
 // Enemy states: 'IDLE' | 'ALERT' | 'ENGAGE' | 'WINDUP' | 'ACTIVE' | 'RECOVER' | 'DODGE' | 'STUN' | 'BROKEN' | 'DEAD' | 'RETURN'
@@ -42,6 +53,7 @@ class Enemy extends Actor {
         this.vet = elite || !!vet;
         this.boss = !!boss;
         this.name = name;
+        this.eliteStyle = elite && !boss ? ELITES.findIndex(([eliteName]) => eliteName === name) : -1;
         this.lives = 1;
         this.camp = null;
         this.x = this.homeX = this.wanderX = x;
@@ -55,6 +67,7 @@ class Enemy extends Actor {
         this.comboIdx = 0;
         this.atk = null;
         this.atkHit = false;
+        this.attackHitsTaken = 0;
         this.attackCd = 0.5;
         this.tokenT = 0;
         this.aware = false;
@@ -88,10 +101,10 @@ class Enemy extends Actor {
         this.rnd = new Rng(seed);
         this.facing = this.rnd.nextDouble() * TAU;
         switch (type) {
-            case 'RONIN': this.stats(16, 70, 70, 150, 380, 0.5); break;
-            case 'SPEAR': this.stats(16, 60, 60, 140, 400, 0.35); break;
+            case 'RONIN': this.stats(16, 82, 82, 150, 380, 0.5); break;
+            case 'SPEAR': this.stats(16, 72, 72, 140, 400, 0.35); break;
             case 'BRUTE':
-                this.stats(25, 200, 150, 105, 340, 0);
+                this.stats(25, 235, 176, 105, 340, 0);
                 this.hyper = true;
                 break;
         }
@@ -122,17 +135,17 @@ class Enemy extends Actor {
             this.speed *= 1.08;
             this.detect = 700;
             this.blockChance = 0.8;
-            this.dodgeChance = 0;
+            this.dodgeChance = 0.3;
             this.lives = 3;
             this.hyper = true;
         }
         // party size and New Game + tier scale every enemy by the same published numbers
         const diff = g.difficulty;
-        this.dmgScale = 1;
+        this.dmgScale = ENEMY_DAMAGE_SCALE;
         if (diff) {
             this.maxHp *= diff.enemyHp;
             this.maxPosture *= diff.enemyPosture;
-            this.dmgScale = diff.enemyDmg;
+            this.dmgScale *= diff.enemyDmg;
         }
         this.hp = this.maxHp;
         this.buildCombos();
@@ -164,6 +177,8 @@ class Enemy extends Actor {
                 this.add(E.R_A);
                 this.add(E.R_A, E.R_B);
                 this.add(E.R_A, E.R_B, E.R_HEAVY);
+                this.add(E.R_BACKHAND, E.R_A);
+                this.add(E.R_FAST, E.R_BACKHAND, E.R_HEAVY);
                 this.add(E.R_THRUST);
                 this.add(E.R_A, E.R_THRUST);
                 this.addGap(E.R_DASH);
@@ -174,6 +189,7 @@ class Enemy extends Actor {
                     this.add(E.R_SPIN);
                     this.add(E.R_A, E.R_B, E.R_SWEEP);
                     this.add(E.R_FAST, E.R_SPIN);
+                    this.add(E.R_BACKHAND, E.R_DELAY);
                     this.addGap(E.R_DASH, E.R_A, E.R_THRUST);
                 }
                 if (this.elite) {
@@ -186,13 +202,18 @@ class Enemy extends Actor {
                 if (this.boss) {
                     this.add(E.R_DASH, E.R_SPIN, E.R_SWEEP, E.R_THRUST);
                     this.add(E.R_FAST, E.R_FAST, E.R_SPIN, E.R_HEAVY, E.R_SWEEP);
+                    this.add(E.R_BACKHAND, E.R_DELAY, E.DAIMYO_ASHFALL);
+                    this.add(E.R_FAST, E.R_SPIN, E.DAIMYO_ASHFALL);
                     this.addGap(E.R_DASH, E.R_DASH, E.R_SPIN);
+                    this.addGap(E.R_DASH, E.R_BACKHAND, E.DAIMYO_ASHFALL);
                 }
                 this.reach = 70;
                 break;
             case 'SPEAR':
                 this.add(E.SP_T1);
                 this.add(E.SP_T1, E.SP_T2);
+                this.add(E.SP_T1, E.SP_HOOK);
+                this.add(E.SP_HOOK, E.SP_T2);
                 this.add(E.SP_T1, E.SP_SWEEP);
                 this.add(E.SP_PER);
                 this.add(E.SP_T1, E.SP_T2, E.SP_PER);
@@ -203,6 +224,7 @@ class Enemy extends Actor {
                     this.add(E.SP_SPIN);
                     this.add(E.SP_T1, E.SP_SPIN);
                     this.add(E.SP_SWEEP, E.SP_PER);
+                    this.add(E.SP_HOOK, E.SP_SWEEP, E.SP_T1);
                     this.addGap(E.SP_DASH, E.SP_SWEEP, E.SP_PER);
                 }
                 if (this.elite) {
@@ -214,13 +236,16 @@ class Enemy extends Actor {
             case 'BRUTE':
                 this.add(E.BR_SMASH);
                 this.add(E.BR_SMASH, E.BR_SWEEP);
+                this.add(E.BR_UPPERCUT, E.BR_SMASH);
                 this.add(E.BR_PER);
                 this.add(E.BR_SWEEP, E.BR_SWEEP, E.BR_SMASH);
+                this.add(E.BR_SWEEP, E.BR_UPPERCUT);
                 this.addGap(E.BR_CHARGE);
                 if (this.vet) {
                     this.add(E.BR_STOMP);
                     this.add(E.BR_SMASH, E.BR_STOMP);
                     this.add(E.BR_SWEEP, E.BR_SMASH, E.BR_PER);
+                    this.add(E.BR_UPPERCUT, E.BR_SWEEP, E.BR_STOMP);
                     this.addGap(E.BR_CHARGE, E.BR_SMASH);
                 }
                 if (this.elite) {
@@ -230,13 +255,63 @@ class Enemy extends Actor {
                 this.reach = 104;
                 break;
         }
+        switch (this.eliteStyle) {
+            case 0: // Kagemaru: feints into a sudden piercing dash
+                this.add(E.R_BACKHAND, E.R_FAST, E.KAGEMARU_VANISH);
+                this.add(E.R_A, E.R_DELAY, E.KAGEMARU_VANISH);
+                this.addGap(E.R_DASH, E.R_BACKHAND, E.KAGEMARU_VANISH);
+                break;
+            case 1: // Gozu: a short uppercut leads into a huge ground strike
+                this.add(E.BR_UPPERCUT, E.GOZU_QUAKE);
+                this.add(E.BR_SWEEP, E.BR_SMASH, E.GOZU_QUAKE);
+                this.addGap(E.BR_CHARGE, E.BR_UPPERCUT, E.GOZU_QUAKE);
+                break;
+            case 2: // Tomoe: hooks and short jabs set up a long crimson charge
+                this.add(E.SP_HOOK, E.SP_T2, E.TOMOE_LANCE);
+                this.add(E.SP_T1, E.SP_SWEEP, E.TOMOE_LANCE);
+                this.addGap(E.SP_DASH, E.SP_T2, E.TOMOE_LANCE);
+                break;
+            case 3: // Ryusei: delayed cuts turn into a wide falling-star slash
+                this.add(E.R_FAST, E.R_BACKHAND, E.RYUSEI_CROSS);
+                this.add(E.R_A, E.R_DELAY, E.RYUSEI_CROSS);
+                this.addGap(E.R_DASH, E.R_SPIN, E.RYUSEI_CROSS);
+                break;
+            case 4: // Okami: switches from narrow thrusts to a broad crescent sweep
+                this.add(E.SP_T1, E.SP_HOOK, E.OKAMI_CRESCENT);
+                this.add(E.SP_FLURRY, E.SP_FLURRY, E.SP_T2, E.OKAMI_CRESCENT);
+                this.addGap(E.SP_DASH, E.SP_HOOK, E.OKAMI_CRESCENT);
+                break;
+        }
     }
 
     pickCombo() {
+        if (this.elite && this.target) {
+            const p = this.target;
+            const signature = this.boss ? EA.DAIMYO_ASHFALL : ELITE_SUPERS[this.eliteStyle];
+            if (p.st === 'HEAL' || p.st === 'STAGGER') {
+                const minWindup = Math.min(...this.combos.filter(c => c.length > 1).map(c => c[0].windup));
+                const quick = this.combos.filter(c => c.length > 1 && c[0].windup <= minWindup + 0.06);
+                if (quick.length) return quick[this.rnd.nextInt(quick.length)];
+            }
+            if (p.guarding && this.rnd.nextDouble() < 0.65) {
+                const pressure = this.combos.filter(c => c.some(a => a.perilous));
+                if (pressure.length) return pressure[this.rnd.nextInt(pressure.length)];
+            }
+            if (signature && this.rnd.nextDouble() < (this.lives === 1 ? 0.55 : this.boss && this.lives === 2 ? 0.4 : 0.22)) {
+                const finishers = this.combos.filter(c => c[c.length - 1].name === signature.name);
+                if (finishers.length) return finishers[this.rnd.nextInt(finishers.length)];
+            }
+        }
         return this.combos[this.rnd.nextInt(this.combos.length)];
     }
 
-    pickGap() { return this.gap[this.rnd.nextInt(this.gap.length)]; }
+    pickGap() {
+        if (this.elite && this.target && (this.target.st === 'HEAL' || this.target.st === 'STAGGER')) {
+            const chains = this.gap.filter(c => c.length > 1);
+            if (chains.length) return chains[this.rnd.nextInt(chains.length)];
+        }
+        return this.gap[this.rnd.nextInt(this.gap.length)];
+    }
 
     setSt(s) {
         this.st = s;
@@ -332,7 +407,7 @@ class Enemy extends Actor {
                         this.beginAttack(1);
                     } else {
                         this.releaseToken();
-                        this.attackCd = this.elite ? 0.3 + this.rnd.nextDouble() * 0.7
+                        this.attackCd = this.elite ? (this.lives === 1 ? 0.16 : 0.22) + this.rnd.nextDouble() * (this.lives === 1 ? 0.36 : 0.45)
                             : this.vet ? 0.6 + this.rnd.nextDouble() * 0.9 : 0.9 + this.rnd.nextDouble() * 1.2;
                         this.setSt('ENGAGE');
                     }
@@ -422,7 +497,8 @@ class Enemy extends Actor {
                 this.startCombo(this.pickCombo(), 1);
                 return;
             }
-            if (this.gap.length > 0 && d > this.reach + p.r + 30 && d < 280 && this.rnd.nextDouble() < dt * (this.vet ? 2.2 : 0.9)) {
+            if (this.gap.length > 0 && d > this.reach + p.r + 30 && d < 280
+                && (this.elite && p.st === 'HEAL' || this.rnd.nextDouble() < dt * (this.vet ? 2.2 : 0.9))) {
                 this.startCombo(this.pickGap(), 1);
                 return;
             }
@@ -490,9 +566,16 @@ class Enemy extends Actor {
         const g = this.g;
         this.atk = this.combo[this.comboIdx];
         this.atkHit = false;
+        this.attackHitsTaken = 0;
         this.setSt('WINDUP');
         // veterans vary their timing so the rhythm can't be memorised
-        this.stDur = this.atk.windup * windupMul * (this.vet ? 0.88 + this.rnd.nextDouble() * 0.3 : 1);
+        const signature = this.boss ? EA.DAIMYO_ASHFALL : ELITE_SUPERS[this.eliteStyle];
+        const superMove = signature !== undefined && this.atk.name === signature.name;
+        this.stDur = this.atk.windup * (superMove ? 1 : windupMul) * (this.vet ? 0.88 + this.rnd.nextDouble() * 0.3 : 1);
+        if (superMove) {
+            g.fx.text(this.atk.name.toUpperCase(), this.x, this.y - 56, rgb(255, 130, 80), 17);
+            g.fx.ring(this.x, this.y, 16, this.atk.range, this.stDur, 3, rgb(255, 90, 65));
+        }
         if (this.atk.perilous) {
             this.perilousT = this.stDur + 0.3;
             g.sfx.play('PERILOUS');
@@ -643,7 +726,11 @@ class Enemy extends Actor {
             this.breakPosture();
             return;
         }
-        const armored = this.hyper || (this.st === 'WINDUP' && this.atk !== null && this.atk.perilous) || (this.elite && this.st === 'ACTIVE');
+        const attacking = this.st === 'WINDUP' || this.st === 'ACTIVE';
+        const braced = attacking && this.attackHitsTaken++ === 0;
+        const armored = this.hyper || braced || (this.st === 'WINDUP' && this.atk !== null && this.atk.perilous)
+            || (this.elite && this.st === 'ACTIVE');
+        if (braced) g.fx.sparks(cx, cy, ang, 1.1, 8, 280, rgb(255, 195, 120));
         if (!armored && this.st !== 'BROKEN') {
             this.flinchCount++;
             if (this.flinchCount >= 3) {

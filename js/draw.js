@@ -98,9 +98,9 @@ const Draw = {
     },
 
     weapon(g, hx, hy, ang, weapon, color) {
-        if (weapon.id === 'spear') return this.spear(g, hx, hy, ang, weapon.len, 26);
-        if (weapon.id === 'hammer') return this.club(g, hx, hy, ang, weapon.len);
-        if (weapon.id === 'axe') {
+        if (weaponType(weapon) === 'spear') return this.spear(g, hx, hy, ang, weapon.len, 26, weapon.id, color || weapon.color);
+        if (weaponType(weapon) === 'hammer') return this.club(g, hx, hy, ang, weapon.len, weapon.id, color || weapon.color);
+        if (weaponType(weapon) === 'axe') {
             const c = Math.cos(ang), s = Math.sin(ang), x = hx + c * weapon.len, y = hy + s * weapon.len;
             setStroke(g, 4, true);
             g.strokeStyle = 'rgb(100,70,44)';
@@ -134,35 +134,52 @@ const Draw = {
         strokeLine(g, hx + c * 12 - s, hy + s * 12 + c, hx + c * (len - 2) - s, hy + s * (len - 2) + c);
     },
 
-    spear(g, hx, hy, ang, len, back) {
+    spear(g, hx, hy, ang, len, back, id, headColor) {
         const c = Math.cos(ang), s = Math.sin(ang);
         setStroke(g, 3.5, true);
         g.strokeStyle = 'rgb(100,70,44)';
         strokeLine(g, hx - c * back, hy - s * back, hx + c * len, hy + s * len);
-        g.fillStyle = 'rgb(210,210,220)';
+        g.fillStyle = css(headColor || rgb(210, 210, 220));
         g.beginPath();
-        g.moveTo(hx + c * (len + 16), hy + s * (len + 16));
-        g.lineTo(hx + c * len - s * 4, hy + s * len + c * 4);
-        g.lineTo(hx + c * len + s * 4, hy + s * len - c * 4);
+        const tip = len + (id === 'serpent-spear' ? 19 : 16), half = id === 'storm-spear' ? 6 : 4;
+        g.moveTo(hx + c * tip, hy + s * tip);
+        if (id === 'serpent-spear') {
+            g.lineTo(hx + c * (len + 8) - s * 8, hy + s * (len + 8) + c * 8);
+            g.lineTo(hx + c * (len + 3) - s * 3, hy + s * (len + 3) + c * 3);
+            g.lineTo(hx + c * (len + 7) + s * 8, hy + s * (len + 7) - c * 8);
+        } else {
+            g.lineTo(hx + c * len - s * half, hy + s * len + c * half);
+            g.lineTo(hx + c * len + s * half, hy + s * len - c * half);
+        }
         g.closePath();
         g.fill();
         g.fillStyle = 'rgb(170,30,30)';
         fillCircle(g, hx + c * (len - 4), hy + s * (len - 4), 3);
     },
 
-    club(g, hx, hy, ang, len) {
+    club(g, hx, hy, ang, len, id, headColor) {
         const c = Math.cos(ang), s = Math.sin(ang);
-        setStroke(g, 6, true);
+        const cx = hx + c * len * 0.82, cy = hy + s * len * 0.82;
+        setStroke(g, 7, true);
         g.strokeStyle = 'rgb(60,44,34)';
-        strokeLine(g, hx, hy, hx + c * len * 0.4, hy + s * len * 0.4);
-        setStroke(g, 12, true);
-        g.strokeStyle = 'rgb(40,36,38)';
-        strokeLine(g, hx + c * len * 0.35, hy + s * len * 0.35, hx + c * len, hy + s * len);
-        g.fillStyle = 'rgb(170,170,160)';
-        for (let i = 0; i < 5; i++) {
-            const t = 0.45 + i * 0.12;
-            fillCircle(g, hx + c * len * t, hy + s * len * t, 2.5);
-        }
+        strokeLine(g, hx, hy, cx, cy);
+        const along = id === 'stone-hammer' ? 11 : id === 'war-hammer' ? 10 : 8;
+        const across = id === 'stone-hammer' ? 18 : id === 'war-hammer' ? 17 : 15;
+        g.beginPath();
+        g.moveTo(cx - c * along - s * across, cy - s * along + c * across);
+        g.lineTo(cx + c * along - s * across, cy + s * along + c * across);
+        g.lineTo(cx + c * along + s * across, cy + s * along - c * across);
+        g.lineTo(cx - c * along + s * across, cy - s * along - c * across);
+        g.closePath();
+        g.fillStyle = css(headColor || rgb(140, 145, 145));
+        g.strokeStyle = 'rgb(48,45,44)';
+        g.lineWidth = 3;
+        g.fill();
+        g.stroke();
+        setStroke(g, 2, false);
+        g.strokeStyle = 'rgb(205,205,195)';
+        strokeLine(g, cx - c * along - s * (across - 3), cy - s * along + c * (across - 3),
+            cx + c * along - s * (across - 3), cy + s * along + c * (across - 3));
     },
 
     /** Sekiro-style glint: a four-point star. */

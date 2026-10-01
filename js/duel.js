@@ -20,7 +20,7 @@ const PLAYER_SYNC = ['x', 'y', 'facing', 'st', 'stT', 'vx', 'vy', 'moveX', 'move
     'comboGrace', 'guarding', 'guardStart', 'guardWindow', 'spam', 'deflectStreak', 'deflectStreakT', 'guardFlash', 'dodgeDx', 'dodgeDy',
     'dodgeHeld', 'sprinting', 'invuln', 'staggerDur', 'hurtFlash', 'postureCd', 'walkAnim', 'scarf', 'hp', 'posture', 'gourds',
     'artCharges', 'healed', 'ki', 'dbDone', 'iaiSx', 'iaiSy', 'iaiDx', 'iaiDy', 'iaiDone', 'iaiLine', 'deadT', 'beingExecuted', 'brokenT',
-    'stabAttack', 'bufThrow', 'throwDone', 'throws', 'gone'];
+    'stabAttack', 'bufThrow', 'throwDone', 'throws', 'gone', 'poiseLeft'];
 const YOU_COLOR = rgb(110, 190, 255), FOE_COLOR = rgb(255, 95, 80);
 const FFA_COLORS = [rgb(255, 95, 80), rgb(120, 220, 120), rgb(255, 205, 80), rgb(205, 135, 255), rgb(90, 225, 215), rgb(255, 140, 200),
     rgb(255, 160, 70), rgb(225, 225, 225)];

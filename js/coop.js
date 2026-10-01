@@ -4,7 +4,7 @@ const COOP_ENEMY_FIELDS = ['x', 'y', 'facing', 'st', 'stT', 'stDur', 'hp', 'post
     'walkAnim', 'hitFlash', 'blockAnim', 'showBars', 'perilousT', 'beingExecuted'];
 const COOP_PLAYER_FIELDS = ['x', 'y', 'facing', 'st', 'stT', 'phase', 'combo', 'guarding', 'guardHeld', 'sprinting',
     'walkAnim', 'scarf', 'swingSign', 'stabAttack', 'hurtFlash', 'invuln', 'vx', 'vy', 'hp', 'maxHp', 'maxGourds', 'maxPosture',
-    'posture', 'deflectStreak', 'deflectPost', 'dmgTaken', 'guardWindow', 'stealth', 'dodgeIframes'];
+    'posture', 'deflectStreak', 'deflectPost', 'dmgTaken', 'guardWindow', 'stealth', 'dodgeIframes', 'poiseLeft'];
 
 class Coop {
     constructor(game, link, host, settings, slot) {
@@ -78,7 +78,7 @@ class Coop {
 
     static playerData(p) {
         return Object.assign(Coop.fields(p, COOP_PLAYER_FIELDS),
-            { sword: p.g.loadout.sword, throwable: p.g.loadout.throwable });
+            { sword: p.g.loadout.sword, throwable: p.g.loadout.throwable, art: p.g.loadout.art, armor: p.g.loadout.armor });
     }
 
     static syncGear(p, data) {
@@ -86,9 +86,17 @@ class Coop {
         const lo = p.g.loadout;
         const weapon = SWORDS.find(w => w.id === data.sword);
         const throwable = THROWABLES.find(w => w.id === data.throwable);
-        if ((weapon && lo.sword !== weapon.id) || (throwable && lo.throwable !== throwable.id)) {
+        const armor = ARMORS.find(a => a.id === data.armor);
+        const nextWeapon = weapon || lo.swordDef();
+        const art = ARTS.find(a => a.id === data.art);
+        const nextArt = art && artMatchesWeapon(art, nextWeapon) ? art.id
+            : !artMatchesWeapon(lo.artDef(), nextWeapon) ? ARTS[0].id : lo.art;
+        if ((weapon && lo.sword !== weapon.id) || (throwable && lo.throwable !== throwable.id) || lo.art !== nextArt
+            || (armor && lo.armor !== armor.id)) {
             if (weapon) lo.sword = weapon.id;
             if (throwable) lo.throwable = throwable.id;
+            if (armor) lo.armor = armor.id;
+            lo.art = nextArt;
             p.applyLoadout();
         }
     }
@@ -255,7 +263,7 @@ class Coop {
         const c = this.connFor(id);
         if (c === null) return;
         c.send({ t: 'coop-impact', result, hp: p.hp, posture: p.posture, ki: p.ki,
-            artCharges: p.artCharges, st: p.st, invuln: p.invuln });
+            artCharges: p.artCharges, st: p.st, invuln: p.invuln, poiseLeft: p.poiseLeft });
     }
 
     receiveImpact(d) {
@@ -274,6 +282,8 @@ class Coop {
             p.hurtFlash = 0.3;
             p.invuln = U.clamp(d.invuln, 0, 2);
             this.game.sfx.play('HURT');
+            if (Number.isFinite(d.poiseLeft)) p.poiseLeft = U.clamp(Math.min(p.poiseLeft, d.poiseLeft), 0, p.poise * 1.5);
+            if (d.st === 'ATTACK') this.game.fx.text('UNFLINCHING', p.x, p.y - 42, rgb(255, 190, 120), 14);
         }
         if (d.st === 'DEAD') p.die();
         else if (d.st === 'STAGGER') {
@@ -389,7 +399,7 @@ class Coop {
             game.executeDeathblow(p, e);
         } else if (d.kind === 'mikiri' && e.atk && e.atk.thrust && p.distTo(e) < e.atk.range + 80) {
             game.onMikiri(p, e);
-        } else if (d.kind === 'iai' && p.distTo(e) < 310) e.takeRaw(45, 70, p.angleTo(e));
+        } else if (d.kind === 'iai' && p.distTo(e) < 310) e.takeRaw(45 * PLAYER_DAMAGE_SCALE, 70, p.angleTo(e));
     }
 
     draw(g) {

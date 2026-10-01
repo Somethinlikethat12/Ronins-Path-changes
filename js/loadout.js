@@ -12,7 +12,7 @@ function artAtk(name, range, arc, dmg, post, pierce) {
     return a;
 }
 
-// hits[].t: seconds into the art when the cut lands. blade(t): sword angle relative to facing. lunge: [from, to, speed].
+// hits[].t: seconds into the art when the strike lands. blade(t): weapon angle relative to facing. lunge: [from, to, speed].
 const ARTS = [
     {
         id: 'whirlwind', name: 'Whirlwind Slash', kanji: '旋風', cost: 2, unlock: 0, color: rgb(170, 230, 255), spin: true,
@@ -42,28 +42,67 @@ const ARTS = [
         hits: [{ t: 0.6, atk: artAtk('mortal', 200, 80, 85, 75, true), line: true }],
         blade: t => (t < 0.6 ? 2.7 : U.lerp(1.2, -1.1, U.clamp((t - 0.6) / 0.07, 0, 1))),
     },
+    {
+        id: 'spearfall', name: 'Heaven-Piercing Thrust', kanji: '穿', cost: 2, unlock: 0, weapon: 'spear',
+        color: rgb(150, 220, 255), motion: 'thrust', trail: true,
+        desc: 'Drive forward with a rapid double thrust.', info: 'Two piercing jabs  -  spear only',
+        dur: 0.82, lunge: [0.05, 0.52, 220],
+        hits: [
+            { t: 0.22, atk: artAtk('spearfall1', 148, 28, 32, 28, true) },
+            { t: 0.48, atk: artAtk('spearfall2', 174, 24, 46, 42, true), line: true },
+        ],
+        blade: () => 0,
+    },
+    {
+        id: 'earthshaker', name: 'Earthshaker', kanji: '砕', cost: 2, unlock: 0, weapon: 'hammer',
+        color: rgb(255, 190, 115), motion: 'slam',
+        desc: 'Wind up and smash the ground with crushing force.', info: 'Massive posture damage  -  hammer only',
+        dur: 0.92, recover: 20, lunge: [0.3, 0.46, 125],
+        hits: [{ t: 0.48, atk: artAtk('earthshaker', 118, 205, 66, 112) }],
+        blade: t => (t < 0.48 ? U.lerp(2.9, -2.2, t / 0.48) : U.lerp(-2.2, 0.15, U.clamp((t - 0.48) / 0.08, 0, 1))),
+    },
 ];
 
 const SWORDS = [
-    { id: 'wanderer', name: "Wanderer's Katana", kanji: '打刀', unlock: 0, dmg: 1, post: 1, spd: 1, reach: 0, len: 56, color: rgb(210, 215, 230),
+    { id: 'wanderer', type: 'katana', name: "Wanderer's Katana", kanji: '打刀', unlock: 0, dmg: 1, post: 1, spd: 1, reach: 0, len: 56, color: rgb(210, 215, 230),
         desc: 'A plain, honest blade. Balanced in every way.', info: 'Balanced' },
-    { id: 'odachi', name: 'Crimson Odachi', kanji: '大太刀', unlock: 1, dmg: 1.3, post: 1.2, spd: 1.2, reach: 16, len: 70, color: rgb(235, 170, 165),
-        desc: 'Long and heavy. Strikes hard but swings slow.', info: 'Damage +30%  -  Reach +16  -  Slower swings' },
-    { id: 'wakizashi', name: 'Mist Raven Wakizashi', kanji: '脇差', unlock: 2, dmg: 0.82, post: 0.9, spd: 0.72, reach: -10, len: 44, color: rgb(175, 210, 245),
+    { id: 'odachi', type: 'katana', name: 'Crimson Odachi', kanji: '大太刀', unlock: 1, poise: 12, dmg: 1.3, post: 1.2, spd: 1.2, reach: 16, len: 70, color: rgb(235, 170, 165),
+        desc: 'Long and heavy. Strikes hard but swings slow, and holds firm mid-swing.', info: 'Damage +30%  -  Reach +16  -  Slower swings' },
+    { id: 'wakizashi', type: 'katana', name: 'Mist Raven Wakizashi', kanji: '脇差', unlock: 2, dmg: 0.82, post: 0.9, spd: 0.72, reach: -10, len: 44, color: rgb(175, 210, 245),
         desc: 'Short and light. Chains cuts in a blur.', info: 'Much faster swings  -  Less damage and reach' },
-    { id: 'sorrow', name: 'Blade of Sorrow', kanji: '哀刃', unlock: 4, dmg: 1.35, post: 1.5, spd: 1.05, reach: 6, len: 62, color: rgb(210, 70, 80),
+    { id: 'sorrow', type: 'katana', name: 'Blade of Sorrow', kanji: '哀刃', unlock: 4, dmg: 1.35, post: 1.5, spd: 1.05, reach: 6, len: 62, color: rgb(210, 70, 80),
         desc: 'A cursed edge that shatters any guard.', info: 'Damage +35%  -  Posture damage +50%' },
-    { id: 'spear', name: 'Ash Spear', kanji: '槍', unlock: 0, dmg: 0.85, post: 0.85, spd: 1.08, reach: 38, len: 76, color: rgb(205, 220, 225),
+    { id: 'spear', type: 'spear', name: 'Ash Spear', kanji: '槍', unlock: 0, dmg: 0.85, post: 0.85, spd: 1.08, reach: 38, len: 76, color: rgb(205, 220, 225),
         combo: [new Attack('spear1', 0.12, 0.10, 0.25, 112, 42, 15, 12, 150),
             new Attack('spear2', 0.12, 0.10, 0.25, 112, 42, 15, 12, 150),
             new Attack('spear3', 0.20, 0.12, 0.40, 125, 54, 25, 24, 210)],
         desc: 'Keep enemies at a distance with narrow thrusts.', info: 'Reach +38  -  Narrow arc  -  Less posture damage' },
-    { id: 'hammer', name: 'Iron Hammer', kanji: '鎚', unlock: 0, dmg: 1.25, post: 1.65, spd: 1.45, reach: -8, len: 48, color: rgb(175, 175, 170),
-        combo: [new Attack('hammer1', 0.18, 0.12, 0.32, 84, 110, 17, 20, 120),
-            new Attack('hammer2', 0.20, 0.12, 0.32, 84, 110, 17, 20, 120),
-            new Attack('hammer3', 0.28, 0.14, 0.52, 96, 140, 27, 32, 170)],
-        desc: 'Slow crushing blows break guards.', info: 'Posture +65%  -  Slow  -  Short reach' },
-    { id: 'axe', name: 'Woodsman Axe', kanji: '斧', unlock: 0, dmg: 1.18, post: 1.3, spd: 1.22, reach: -3, len: 52, color: rgb(205, 200, 190),
+    { id: 'storm-spear', type: 'spear', name: 'Tempest Spear', kanji: '嵐槍', unlock: 1, dmg: 0.92, post: 0.92, spd: 0.9, reach: 48, len: 86, color: rgb(165, 205, 235),
+        combo: [new Attack('stormSpear1', 0.11, 0.09, 0.24, 118, 36, 15, 12, 170),
+            new Attack('stormSpear2', 0.11, 0.09, 0.24, 118, 36, 15, 12, 170),
+            new Attack('stormSpear3', 0.18, 0.12, 0.38, 132, 48, 26, 25, 230)],
+        desc: 'A long, quick spear that keeps foes at bay.', info: 'Longer reach  -  Faster thrusts  -  Light hits' },
+    { id: 'serpent-spear', type: 'spear', name: 'Serpent Fang Spear', kanji: '蛇槍', unlock: 3, dmg: 1.12, post: 1, spd: 1.18, reach: 30, len: 72, color: rgb(150, 205, 165),
+        combo: [new Attack('serpentSpear1', 0.14, 0.11, 0.26, 108, 48, 17, 14, 145),
+            new Attack('serpentSpear2', 0.13, 0.10, 0.25, 108, 48, 17, 14, 150),
+            new Attack('serpentSpear3', 0.22, 0.14, 0.42, 122, 62, 29, 28, 215)],
+        desc: 'A hooked point built for forceful, accurate thrusts.', info: 'Damage +12%  -  Broad thrusts  -  Faster than Ash Spear' },
+    { id: 'hammer', type: 'hammer', name: 'Iron Hammer', kanji: '鎚', unlock: 0, poise: 26, dmg: 1.25, post: 1.65, spd: 1.45, reach: -8, len: 58, color: rgb(175, 175, 170),
+        combo: [new Attack('hammer1', 0.18, 0.12, 0.32, 84, 150, 17, 20, 120),
+            new Attack('hammer2', 0.20, 0.12, 0.32, 84, 150, 17, 20, 120),
+            new Attack('hammer3', 0.28, 0.14, 0.52, 96, 185, 27, 32, 170)],
+        desc: 'Slow crushing blows break guards and shrug off light hits mid-swing.', info: 'Posture +65%  -  Hard to interrupt  -  Slow' },
+    { id: 'war-hammer', type: 'hammer', name: 'Ashen Warhammer', kanji: '戦鎚', unlock: 1, poise: 32, dmg: 1.38, post: 1.82, spd: 1.62, reach: -12, len: 64, color: rgb(195, 160, 125),
+        combo: [new Attack('warHammer1', 0.20, 0.12, 0.36, 82, 158, 18, 22, 115),
+            new Attack('warHammer2', 0.22, 0.12, 0.36, 82, 158, 18, 22, 115),
+            new Attack('warHammer3', 0.31, 0.15, 0.56, 94, 195, 29, 35, 165)],
+        desc: 'A massive two-handed head that batters any guard.', info: 'More damage and posture  -  Very slow  -  Short reach' },
+    { id: 'stone-hammer', type: 'hammer', name: 'Stone Maul', kanji: '石鎚', unlock: 3, poise: 38, dmg: 1.52, post: 1.95, spd: 1.78, reach: -16, len: 68, color: rgb(185, 185, 175),
+        combo: [new Attack('stoneHammer1', 0.23, 0.13, 0.4, 78, 165, 20, 25, 105),
+            new Attack('stoneHammer2', 0.24, 0.13, 0.4, 78, 165, 20, 25, 105),
+            new Attack('stoneHammer3', 0.34, 0.16, 0.6, 92, 205, 32, 39, 155)],
+        desc: 'A stone-headed maul with devastating but deliberate swings.', info: 'High damage and posture  -  Slowest  -  Shortest reach' },
+    { id: 'axe', type: 'axe', name: 'Woodsman Axe', kanji: '斧', unlock: 0, poise: 16, dmg: 1.18, post: 1.3, spd: 1.22, reach: -3, len: 52, color: rgb(205, 200, 190),
         combo: [new Attack('axe1', 0.14, 0.11, 0.28, 84, 180, 17, 15, 170),
             new Attack('axe2', 0.14, 0.11, 0.28, 84, 180, 17, 15, 170),
             new Attack('axe3', 0.24, 0.14, 0.45, 98, 240, 27, 27, 220)],
@@ -86,6 +125,14 @@ const ARMORS = [
         desc: 'Dark, silent and light. Made for those who strike unseen.', info: 'Move +10%  -  Quieter  -  Damage taken +10%' },
     { id: 'lamellar', name: 'Ashina Lamellar', kanji: '具足', unlock: 2, def: 0.78, move: 0.9, posture: 25, stealth: 1.2, shoulder: rgb(120, 104, 84),
         desc: 'Lacquered plates that turn aside the blade.', info: 'Damage taken -22%  -  Posture +25  -  Slower, louder' },
+    { id: 'ashigaru', name: 'Ashigaru Cuirass', kanji: '足軽胴', unlock: 1, def: 0.9, move: 1.06, posture: 5, stealth: 1, shoulder: rgb(70, 92, 118),
+        affinity: 'spear', bonus: { reach: 10, spd: 0.92 },
+        desc: 'A trim spearman\'s cuirass. Light on the feet, free at the arms.',
+        info: 'Damage taken -10%  -  Move +6%  -  Spear: reach +10, thrusts 8% faster' },
+    { id: 'oyoroi', name: 'Iron Oyoroi', kanji: '大鎧', unlock: 2, def: 0.7, move: 0.86, posture: 35, stealth: 1.35, shoulder: rgb(84, 80, 78),
+        affinity: 'hammer', bonus: { poise: 14, post: 1.12 },
+        desc: 'Heavy iron plate made to wade through blows behind a maul.',
+        info: 'Damage taken -30%  -  Posture +35  -  Slow  -  Hammer: poise +14, posture damage +12%' },
 ];
 
 const CHARMS = [
@@ -110,6 +157,14 @@ const EQUIP_SLOTS = [
     { field: 'charm', label: 'Charm', list: CHARMS },
 ];
 
+const WEAPON_TYPES = [
+    { id: 'all', label: 'All', name: 'weapon' },
+    { id: 'katana', label: 'Katanas', name: 'katana' },
+    { id: 'spear', label: 'Spears', name: 'spear' },
+    { id: 'hammer', label: 'Hammers', name: 'hammer' },
+    { id: 'axe', label: 'Axes', name: 'axe' },
+];
+
 const LOOKS = [
     { key: 'robe', label: 'Robe', colors: [rgb(40, 45, 72), rgb(28, 28, 32), rgb(96, 30, 34), rgb(38, 68, 48), rgb(112, 100, 80), rgb(205, 205, 210), rgb(72, 42, 94)] },
     { key: 'scarf', label: 'Scarf', colors: [rgb(200, 30, 40), rgb(230, 200, 90), rgb(240, 240, 240), rgb(60, 120, 200), rgb(40, 40, 40), rgb(90, 180, 110), rgb(220, 120, 180)] },
@@ -118,6 +173,10 @@ const LOOKS = [
 ];
 
 function findItem(list, id) { return list.find(i => i.id === id) || list[0]; }
+function weaponType(weapon) { return weapon.type || 'katana'; }
+function artMatchesWeapon(art, weapon) { return !art.weapon || art.weapon === weaponType(weapon); }
+function armorFitsWeapon(armor, weapon) { return !!armor.affinity && armor.affinity === weaponType(weapon); }
+function weaponTypeName(type) { return WEAPON_TYPES.find(t => t.id === type).name; }
 
 class Loadout {
     constructor() {
@@ -180,6 +239,8 @@ class Loadout {
     }
 }
 
+const PLAYER_DAMAGE_SCALE = 0.94;
+
 function computeStats(lo, baseHp, baseGourds, skills) {
     const sw = lo.swordDef(), ar = lo.armorDef(), ch = lo.charmDef();
     const s = {
@@ -187,10 +248,11 @@ function computeStats(lo, baseHp, baseGourds, skills) {
         maxPosture: 100 + ar.posture + (ch.posture || 0),
         gourds: baseGourds + (ch.gourds || 0),
         charges: BASE_ART_CHARGES + (ch.charges || 0),
-        dmg: sw.dmg * (ch.dmg || 1),
+        dmg: sw.dmg * (ch.dmg || 1) * PLAYER_DAMAGE_SCALE,
         post: sw.post,
         spd: sw.spd,
         reach: sw.reach,
+        poise: sw.poise || 0,
         def: ar.def * (ch.def || 1),
         move: ar.move,
         deflect: PERFECT_WINDOW + (ch.deflect || 0),
@@ -203,6 +265,13 @@ function computeStats(lo, baseHp, baseGourds, skills) {
         dragonFlash: false,
         lastStand: false,
     };
+    if (armorFitsWeapon(ar, sw)) {
+        const b = ar.bonus;
+        s.reach += b.reach || 0;
+        s.spd *= b.spd || 1;
+        s.poise += b.poise || 0;
+        s.post *= b.post || 1;
+    }
     if (skills) for (const sk of SKILLS) if (skills.has(sk.id)) sk.apply(s);
     return s;
 }
@@ -234,6 +303,7 @@ const STAT_ROWS = [
     ['Attack', s => s.dmg * 100, v => Math.round(v) + '%', 1],
     ['Posture Damage', s => s.post * 100, v => Math.round(v) + '%', 1],
     ['Swing Speed', s => 100 / s.spd, v => Math.round(v) + '%', 1],
+    ['Poise', s => s.poise, v => Math.round(v), 1],
     ['Damage Taken', s => s.def * 100, v => Math.round(v) + '%', -1],
     ['Move Speed', s => s.move * 100, v => Math.round(v) + '%', 1],
     ['Deflect Window', s => s.deflect * 1000, v => Math.round(v) + 'ms', 1],
@@ -250,9 +320,10 @@ class EquipMenu {
         this.g = game;
         this.open = false;
         this.tab = 0;
+        this.weaponTypeTab = 0;
         this.sel = new Array(EQUIP_SLOTS.length + 2).fill(0);
         this.scroll = new Array(EQUIP_SLOTS.length + 2).fill(0);
-        this.rects = { tab: -1, tabs: [], rows: [], swatches: [] };
+        this.rects = { tab: -1, tabs: [], subtabs: [], rows: [], swatches: [] };
         this.lastMx = -1;
         this.lastMy = -1;
         this.msg = null;
@@ -263,11 +334,36 @@ class EquipMenu {
         const lo = this.g.loadout;
         this.open = true;
         EQUIP_SLOTS.forEach((s, i) => { this.sel[i] = Math.max(0, s.list.findIndex(it => it.id === lo[s.field])); });
+        this.weaponTypeTab = Math.max(0, WEAPON_TYPES.findIndex(t => t.id === weaponType(lo.swordDef())));
     }
 
     unlocked(it) { return this.g.elitesSlain >= it.unlock; }
 
-    count() { return this.tab < EQUIP_SLOTS.length ? EQUIP_SLOTS[this.tab].list.length : LOOKS.length; }
+    weaponIndices() {
+        const type = WEAPON_TYPES[this.weaponTypeTab].id;
+        return SWORDS.flatMap((weapon, i) => type === 'all' || weaponType(weapon) === type ? [i] : []);
+    }
+
+    tabIndices() {
+        if (this.tab < EQUIP_SLOTS.length) {
+            return this.tab === 1 ? this.weaponIndices() : EQUIP_SLOTS[this.tab].list.map((_, i) => i);
+        }
+        return LOOKS.map((_, i) => i);
+    }
+
+    count() { return this.tabIndices().length; }
+
+    moveSelection(delta) {
+        const indices = this.tabIndices(), current = indices.indexOf(this.sel[this.tab]);
+        const pos = current < 0 ? 0 : (current + delta + indices.length) % indices.length;
+        this.sel[this.tab] = indices[pos];
+    }
+
+    selectWeaponType(i) {
+        this.weaponTypeTab = i;
+        const indices = this.weaponIndices();
+        if (!indices.includes(this.sel[1])) this.sel[1] = indices[0];
+    }
 
     note(s) {
         this.msg = s;
@@ -284,6 +380,14 @@ class EquipMenu {
         if (inp.hit('KeyQ')) this.tab = (this.tab + nTabs - 1) % nTabs;
         if (inp.hit('KeyE')) this.tab = (this.tab + 1) % nTabs;
         const appearance = this.tab === LOOK_TAB, skillsTab = this.tab === SKILL_TAB;
+        if (this.tab === 1) {
+            if (inp.hit('KeyA') || inp.hit('ArrowLeft')) {
+                this.selectWeaponType((this.weaponTypeTab + WEAPON_TYPES.length - 1) % WEAPON_TYPES.length);
+            }
+            if (inp.hit('KeyD') || inp.hit('ArrowRight')) {
+                this.selectWeaponType((this.weaponTypeTab + 1) % WEAPON_TYPES.length);
+            }
+        }
         if (skillsTab) {
             let b = Math.floor(this.sel[SKILL_TAB] / SKILL_TIERS), t = this.sel[SKILL_TAB] % SKILL_TIERS;
             if (inp.hit('KeyW') || inp.hit('ArrowUp')) t = (t + SKILL_TIERS - 1) % SKILL_TIERS;
@@ -294,8 +398,8 @@ class EquipMenu {
             if (inp.hit('Enter') || inp.hit('NumpadEnter') || inp.hit('Space')) this.learn(this.sel[SKILL_TAB]);
         } else {
             const n = this.count();
-            if (inp.hit('KeyW') || inp.hit('ArrowUp')) this.sel[this.tab] = (this.sel[this.tab] + n - 1) % n;
-            if (inp.hit('KeyS') || inp.hit('ArrowDown')) this.sel[this.tab] = (this.sel[this.tab] + 1) % n;
+            if (inp.hit('KeyW') || inp.hit('ArrowUp')) this.moveSelection(-1);
+            if (inp.hit('KeyS') || inp.hit('ArrowDown')) this.moveSelection(1);
             if (appearance) {
                 if (inp.hit('KeyA') || inp.hit('ArrowLeft')) this.cycleLook(this.sel[this.tab], -1);
                 if (inp.hit('KeyD') || inp.hit('ArrowRight')) this.cycleLook(this.sel[this.tab], 1);
@@ -310,6 +414,10 @@ class EquipMenu {
         if (click) {
             for (const r of this.rects.tabs) if (inside(r)) {
                 this.tab = r.i;
+                return;
+            }
+            for (const r of this.rects.subtabs) if (inside(r)) {
+                this.selectWeaponType(r.i);
                 return;
             }
             for (const r of this.rects.swatches) if (inside(r)) {
@@ -371,11 +479,21 @@ class EquipMenu {
             g.sfx.play('BLOCK');
             return;
         }
+        if (slot.field === 'art' && !artMatchesWeapon(it, g.loadout.swordDef())) {
+            this.note(it.name + ' requires a ' + weaponTypeName(it.weapon));
+            g.sfx.play('BLOCK');
+            return;
+        }
         if (g.loadout[slot.field] === it.id) return;
         g.loadout[slot.field] = it.id;
+        let artReset = false;
+        if (slot.field === 'sword' && !artMatchesWeapon(g.loadout.artDef(), it)) {
+            g.loadout.art = ARTS[0].id;
+            artReset = true;
+        }
         g.player.applyLoadout();
         if (slot.field === 'throwable') this.note(it.name + ' equipped  -  rest at a shrine to refill');
-        else this.note(it.name + ' equipped');
+        else this.note(it.name + ' equipped' + (artReset ? '  -  switched to ' + ARTS[0].name : ''));
         g.loadout.save();
         g.saveSoon();
         g.sfx.play('SLASH');
@@ -397,8 +515,8 @@ class EquipMenu {
     previewLoadout() {
         const lo = this.g.loadout;
         if (this.tab >= EQUIP_SLOTS.length) return lo;
-        const slot = EQUIP_SLOTS[this.tab], p = lo.clone();
-        p[slot.field] = slot.list[this.sel[this.tab]].id;
+        const slot = EQUIP_SLOTS[this.tab], p = lo.clone(), idx = this.sel[this.tab];
+        p[slot.field] = slot.list[idx].id;
         return p;
     }
 
@@ -409,7 +527,7 @@ class EquipMenu {
     draw(g, sw, sh) {
         const game = this.g;
         const W = Math.min(1000, sw - 40), H = Math.min(640, sh - 40), X = Math.round((sw - W) / 2), Y = Math.round((sh - H) / 2);
-        const R = this.rects = { tab: this.tab, tabs: [], rows: [], swatches: [] };
+        const R = this.rects = { tab: this.tab, tabs: [], subtabs: [], rows: [], swatches: [] };
         g.fillStyle = 'rgba(0,0,0,0.65)';
         g.fillRect(0, 0, sw, sh);
         roundRectPath(g, X, Y, W, H, 10);
@@ -451,7 +569,8 @@ class EquipMenu {
         else this.drawLooks(g, lx, top, lw, R);
 
         g.font = SMALL_FONT;
-        const hint = this.tab < EQUIP_SLOTS.length ? 'W/S select     Enter / Click equip     Q/E switch tab     Tab close'
+        const hint = this.tab === 1 ? 'W/S select     A/D weapon type     Enter / Click equip     Q/E menu tab     Tab close'
+            : this.tab < EQUIP_SLOTS.length ? 'W/S select     Enter / Click equip     Q/E switch tab     Tab close'
             : skillsTab ? 'WASD select     Click to select, click again or Enter to learn     Q/E switch tab     Tab close'
                 : 'W/S select     A/D or click to change     Q/E switch tab     Tab close';
         game.text(g, hint, X + W / 2, Y + H - 16, rgb(180, 165, 145), true);
@@ -493,23 +612,40 @@ class EquipMenu {
                 g.font = SMALL_FONT;
                 this.rightText(g, fmt(a) + '  \u2192', x + w - 12 - g.measureText(s).width - 8, yy, rgb(160, 150, 140));
             }
-            yy += 21;
+            yy += 19;
         }
     }
 
     drawList(g, x, y, w, h, R) {
-        const game = this.g, lo = game.loadout, slot = EQUIP_SLOTS[this.tab], list = slot.list;
+        const game = this.g, lo = game.loadout, slot = EQUIP_SLOTS[this.tab];
+        const indices = this.tabIndices(), list = indices.map(i => slot.list[i]);
+        if (this.tab === 1) {
+            const gap = 5, tabW = (w - gap * (WEAPON_TYPES.length - 1)) / WEAPON_TYPES.length;
+            WEAPON_TYPES.forEach((type, i) => {
+                const r = { x: x + i * (tabW + gap), y, w: tabW, h: 32, i };
+                R.subtabs.push(r);
+                roundRectPath(g, r.x, r.y, r.w, r.h, 5);
+                g.fillStyle = i === this.weaponTypeTab ? 'rgb(130,32,32)' : 'rgb(46,36,33)';
+                g.fill();
+                g.font = 'bold 13px serif';
+                this.g.text(g, type.label, r.x + r.w / 2, r.y + 21,
+                    i === this.weaponTypeTab ? rgb(255, 235, 210) : rgb(190, 175, 160), true);
+            });
+            y += 42;
+            h -= 42;
+        }
         const rowH = 70, gap = 6, vis = Math.max(1, Math.floor((h + gap) / (rowH + gap)));
-        const sel = this.sel[this.tab];
+        const selectedIndex = indices.indexOf(this.sel[this.tab]), sel = selectedIndex < 0 ? 0 : selectedIndex;
         let first = this.scroll[this.tab];
         if (sel < first) first = sel;
         if (sel >= first + vis) first = sel - vis + 1;
         first = U.clamp(first, 0, Math.max(0, list.length - vis));
         this.scroll[this.tab] = first;
         for (let k = 0; k < vis && first + k < list.length; k++) {
-            const i = first + k, it = list[i], ry = y + k * (rowH + gap);
+            const i = indices[first + k], it = list[first + k], ry = y + k * (rowH + gap);
             R.rows.push({ x, y: ry, w, h: rowH, i });
-            const locked = !this.unlocked(it), equipped = lo[slot.field] === it.id;
+            const weaponLocked = slot.field === 'art' && !artMatchesWeapon(it, lo.swordDef());
+            const locked = !this.unlocked(it) || weaponLocked, equipped = lo[slot.field] === it.id;
             roundRectPath(g, x, ry, w, rowH, 6);
             g.fillStyle = i === sel ? 'rgb(72,50,40)' : 'rgb(38,30,28)';
             g.fill();
@@ -528,10 +664,16 @@ class EquipMenu {
             g.font = '12px sans-serif';
             game.text(g, it.info, x + 84, ry + 62, U.alpha(rgb(140, 210, 200), dim), false);
             g.font = 'bold 13px sans-serif';
-            if (locked) this.rightText(g, 'Slay ' + it.unlock + ' elite' + (it.unlock > 1 ? 's' : ''), x + w - 12, ry + 24, rgb(200, 120, 110));
-            else if (equipped) this.rightText(g, 'EQUIPPED', x + w - 12, ry + 24, rgb(240, 200, 110));
+            if (!this.unlocked(it)) this.rightText(g, 'Slay ' + it.unlock + ' elite' + (it.unlock > 1 ? 's' : ''), x + w - 12, ry + 24, rgb(200, 120, 110));
+            else if (weaponLocked) this.rightText(g, 'Requires ' + weaponTypeName(it.weapon), x + w - 12, ry + 24, rgb(220, 160, 110));
+            else if (slot.field === 'armor' && it.affinity) {
+                const fits = armorFitsWeapon(it, lo.swordDef());
+                const tag = fits ? WEAPON_TYPES.find(t => t.id === it.affinity).label.replace(/s$/, '') + ' bonus active' : 'Best with a ' + weaponTypeName(it.affinity);
+                this.rightText(g, (equipped ? 'EQUIPPED  -  ' : '') + tag, x + w - 12, ry + 24,
+                    fits ? rgb(130, 225, 140) : equipped ? rgb(240, 200, 110) : rgb(170, 160, 150));
+            } else if (equipped) this.rightText(g, 'EQUIPPED', x + w - 12, ry + 24, rgb(240, 200, 110));
             if (it.cost !== undefined) {
-                this.rightText(g, 'Needs ' + it.cost + ' deflect charges', x + w - 12, ry + 62, U.alpha(rgb(255, 215, 110), dim));
+                this.rightText(g, 'Costs ' + it.cost + ' art charges', x + w - 12, ry + 62, U.alpha(rgb(255, 215, 110), dim));
             }
         }
         g.font = HUD_FONT;

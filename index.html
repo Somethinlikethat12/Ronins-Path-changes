@@ -8,29 +8,35 @@
         html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
         canvas { display: block; outline: none; }
         #menu {
-            position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-            overflow: auto; background: radial-gradient(ellipse at center, #2a1a16 0%, #0b0807 75%);
+            position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center;
+            overflow: auto; box-sizing: border-box; padding: 24px 0;
+            background: radial-gradient(ellipse at 18% 14%, rgba(114, 43, 30, 0.24), transparent 42%),
+                radial-gradient(ellipse at 82% 86%, rgba(133, 97, 45, 0.13), transparent 36%), #0b0908;
             font-family: Georgia, 'Times New Roman', serif; color: #eadfcf;
         }
         #menu[hidden], #menu .panel[hidden] { display: none; }
         #menu .panel {
             display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(520px, 92vw);
-            max-height: calc(100vh - 24px); overflow-y: auto; box-sizing: border-box; padding: 12px 0; text-align: center;
+            max-height: calc(100vh - 48px); overflow-y: auto; box-sizing: border-box; padding: 12px 0; text-align: center;
         }
         #menu h1 { margin: 0; font-size: 58px; color: #e03c32; letter-spacing: 2px; text-shadow: 3px 3px 0 #000; }
         #menu h2 { margin: 0 0 6px; font-size: 32px; color: #e03c32; }
         #menu .kanji { font-size: 30px; color: #c9b48f; margin-bottom: 18px; font-family: 'Yu Mincho', 'MS Mincho', 'Noto Serif JP', serif; }
         #menu p { margin: 0; color: #c9bba5; font-size: 15px; line-height: 1.45; }
         #menu button {
-            width: 100%; padding: 13px 18px; font: bold 19px Georgia, serif; color: #f4e9d8; cursor: pointer;
-            background: linear-gradient(#5a1f1b, #3a1412); border: 1px solid #a7533f; border-radius: 4px;
+            width: 100%; padding: 13px 18px; font: bold 17px Georgia, serif; color: #f4e9d8; cursor: pointer;
+            background: linear-gradient(135deg, #34231d, #201613); border: 1px solid #584437; border-radius: 5px;
+            transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
         }
         #menu a.feedback {
             position: fixed; right: 20px; bottom: 20px; z-index: 2; padding: 10px 16px;
             font: bold 16px Georgia, serif; color: #f4e9d8; text-decoration: none;
             background: linear-gradient(#5a1f1b, #3a1412); border: 1px solid #a7533f; border-radius: 4px;
         }
-        #menu button:hover:not(:disabled) { background: linear-gradient(#7a2922, #4d1915); border-color: #e0a15f; }
+        #menu button:hover:not(:disabled) { background: linear-gradient(135deg, #563028, #321b16); border-color: #c17a51; transform: translateY(-1px); }
+        #menu button:focus-visible, #menu a:focus-visible, #menu input:focus-visible, #menu select:focus-visible {
+            outline: 2px solid #e0b576; outline-offset: 3px;
+        }
         #menu a.feedback:hover, #menu a.feedback:focus-visible { background: linear-gradient(#7a2922, #4d1915); border-color: #e0a15f; }
         #menu button:disabled { opacity: 0.45; cursor: default; }
         #menu button.back { background: transparent; border-color: #5d4a3c; font-size: 16px; width: auto; padding: 8px 26px; }
@@ -54,6 +60,46 @@
         }
         #menu .settings input[type="checkbox"] { width: auto; }
         #menu .settings input:disabled { opacity: 0.4; }
+        #menu .main-panel {
+            width: min(980px, calc(100vw - 40px)); max-height: calc(100vh - 48px); align-items: stretch;
+            gap: 18px; padding: clamp(22px, 5vh, 48px) clamp(20px, 5vw, 56px);
+            text-align: left; background: linear-gradient(135deg, rgba(27, 21, 18, 0.97), rgba(15, 13, 12, 0.97));
+            border: 1px solid #544032; border-radius: 10px; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+        }
+        #menu .main-panel::before {
+            content: ""; display: block; width: 48px; height: 3px; background: #b84936;
+            box-shadow: 20px 0 0 #70543a;
+        }
+        #menu .menu-brand { display: grid; gap: 5px; }
+        #menu .menu-brand h1 { font-size: clamp(42px, 8vw, 72px); line-height: 0.98; letter-spacing: 0.08em; }
+        #menu .menu-brand h1 span { color: #d8c6a7; }
+        #menu .menu-brand .kanji { margin: 0; font-size: 22px; color: #a88b65; }
+        #menu .menu-tagline { color: #c9bba5; font-size: 16px; letter-spacing: 0.04em; }
+        #menu .menu-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        #menu .menu-group { display: grid; align-content: start; gap: 9px; padding: 16px; background: rgba(0, 0, 0, 0.2); border: 1px solid #352a23; border-radius: 7px; }
+        #menu .menu-group h2 { margin: 0 0 3px; color: #d6b987; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; }
+        #menu .menu-group > p { margin: 0 0 5px; min-height: 40px; color: #9f9180; font-size: 13px; }
+        #menu .menu-choice { display: grid; gap: 4px; min-height: 58px; padding: 10px 13px; text-align: left; }
+        #menu .menu-choice.primary { background: linear-gradient(135deg, #712e25, #3f1c18); border-color: #a7533f; }
+        #menu .choice-title { font-size: 16px; }
+        #menu .choice-copy { color: #b5a595; font: 12px/1.3 Arial, sans-serif; font-weight: normal; }
+        #menu .menu-choice.primary .choice-copy { color: #e1c9b6; }
+        #menu .menu-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        #menu .menu-footer .note { max-width: 700px; font-size: 12px; }
+        #menu .main-panel a.feedback { position: static; flex: 0 0 auto; padding: 9px 12px; font-size: 13px; }
+        @media (max-width: 640px) {
+            #menu { padding: 12px 0; }
+            #menu .main-panel { width: calc(100vw - 20px); max-height: calc(100vh - 24px); gap: 13px; padding: 20px 15px; }
+            #menu .menu-actions { grid-template-columns: 1fr; gap: 10px; }
+            #menu .menu-group { gap: 7px; padding: 12px; }
+            #menu .menu-group > p { min-height: 0; }
+            #menu .menu-choice { min-height: 52px; }
+            #menu .menu-footer { align-items: flex-start; flex-direction: column; }
+            #menu .main-panel a.feedback { align-self: flex-start; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #menu button { transition: none; }
+        }
         #pause-feedback {
             position: fixed; z-index: 2; right: 20px; bottom: 20px;
             padding: 10px 18px; font: bold 16px Georgia, serif; color: #f4e9d8; text-decoration: none;
@@ -66,16 +112,46 @@
 <body>
     <canvas id="game" tabindex="0"></canvas>
     <div id="menu">
-        <div class="panel" id="menu-main" hidden>
-            <h1>RONIN'S PATH</h1>
-            <div class="kanji">浪人の道</div>
-            <button id="btn-journey">Begin Journey</button>
-            <button id="btn-host-coop">Host Co-op Journey</button>
-            <button id="btn-join-coop">Join Co-op Journey</button>
-            <button id="btn-host">Host Online Duel</button>
-            <button id="btn-join">Join Online Duel</button>
-            <p class="note">Co-op is for a party of friends in the same world. The host's journey saves progress; guests join for this session. Duels are 1v1 or free-for-all for up to eight swordsmen.</p>
-            <a class="feedback" href="https://github.com/harpermoor/Ronins-Path/issues/new" target="_blank" rel="noopener noreferrer" title="Opens public GitHub Issues">Send Feedback</a>
+        <div class="panel main-panel" id="menu-main" hidden>
+            <header class="menu-brand">
+                <h1>RONIN'S <span>PATH</span></h1>
+                <div class="kanji">浪人の道</div>
+            </header>
+            <p class="menu-tagline">A lone blade. A land in conflict.</p>
+            <div class="menu-actions">
+                <section class="menu-group">
+                    <h2>Your journey</h2>
+                    <p>Explore, master your weapons, and carve a path through the land.</p>
+                    <button class="menu-choice primary" id="btn-journey">
+                        <span class="choice-title">Begin Journey</span>
+                        <span class="choice-copy">Continue your saved adventure or start a new one.</span>
+                    </button>
+                </section>
+                <section class="menu-group">
+                    <h2>Play together</h2>
+                    <p>Share the journey or test your skill in an online duel.</p>
+                    <button class="menu-choice" id="btn-host-coop">
+                        <span class="choice-title">Host Co-op Journey</span>
+                        <span class="choice-copy">Invite friends into your world; the host saves progress.</span>
+                    </button>
+                    <button class="menu-choice" id="btn-join-coop">
+                        <span class="choice-title">Join Co-op Journey</span>
+                        <span class="choice-copy">Join a friend's shared adventure for this session.</span>
+                    </button>
+                    <button class="menu-choice" id="btn-host">
+                        <span class="choice-title">Host Online Duel</span>
+                        <span class="choice-copy">Set the rules for a duel or free-for-all.</span>
+                    </button>
+                    <button class="menu-choice" id="btn-join">
+                        <span class="choice-title">Join Online Duel</span>
+                        <span class="choice-copy">Enter a room code to challenge other players.</span>
+                    </button>
+                </section>
+            </div>
+            <footer class="menu-footer">
+                <p class="note">Online play requires an internet connection. Co-op guests do not save journey progress.</p>
+                <a class="feedback" href="https://github.com/harpermoor/Ronins-Path/issues/new" target="_blank" rel="noopener noreferrer" title="Opens public GitHub Issues">Send Feedback</a>
+            </footer>
         </div>
         <div class="panel" id="menu-host" hidden>
             <h2>Host a Duel</h2>

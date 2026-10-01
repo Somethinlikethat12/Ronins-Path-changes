@@ -110,16 +110,28 @@ class Game {
     spawnEnemies() {
         const world = this.world, rnd = this.rnd, mul = this.difficulty.enemyCount;
         const scale = n => Math.max(1, Math.round(n * mul));
-        let s = 1;
+        let s = 1, legacyIndex = 0, previousIndex = 0;
         for (const c of world.camps) {
             if (c.elite) {
                 this.totalElites++;
-                this.addEnemy(new Enemy(this, c.eliteType, c.x + 70, c.y, true, c.eliteName, s++), c);
-                for (let i = 0; i < scale(1); i++) this.addEnemy(this.randomGrunt(c, s++, false), c);
+                const elite = new Enemy(this, c.eliteType, c.x + 70, c.y, true, c.eliteName, s++);
+                elite.legacyIndex = legacyIndex++;
+                elite.previousIndex = previousIndex++;
+                this.addEnemy(elite, c);
+                // Keep old seed/slot progression so v1 and v2 saves still identify defeated enemies.
+                for (let i = 0; i < scale(1); i++) {
+                    this.randomGrunt(c, s++, false);
+                    legacyIndex++;
+                }
             } else {
-                const n = scale(2 + rnd.nextInt(2));
+                const n = scale(2 + rnd.nextInt(2)), defenders = Math.max(1, Math.ceil(n / 2));
                 const brute = rnd.nextDouble() < 0.3;
-                for (let i = 0; i < n; i++) this.addEnemy(this.randomGrunt(c, s++, brute && i === 0), c);
+                for (let i = 0; i < n; i++) {
+                    const e = this.randomGrunt(c, s++, brute && i === 0);
+                    e.legacyIndex = legacyIndex++;
+                    e.previousIndex = previousIndex++;
+                    if (i < defenders) this.addEnemy(e, c);
+                }
             }
         }
         const sp = world.shrines[0];
@@ -131,7 +143,12 @@ class Game {
             const group = rnd.nextDouble() < 0.4 ? 2 : 1;
             for (let i = 0; i < group; i++) {
                 const t = this.pickType();
-                this.addEnemy(new Enemy(this, t, x + i * 40, y + i * 30, false, null, 1000 + tries * 3 + i), null);
+                const e = new Enemy(this, t, x + i * 40, y + i * 30, false, null, 1000 + tries * 3 + i);
+                e.legacyIndex = legacyIndex++;
+                if (!world.camps.some(c => c.elite && U.dist(e.x, e.y, c.x, c.y) < 1050)) {
+                    e.previousIndex = previousIndex++;
+                    this.addEnemy(e, null);
+                }
             }
             wanderers++;
         }
@@ -471,7 +488,7 @@ class Game {
             e.hp = Math.min(e.maxHp, e.hp * hpRatio);
             e.maxPosture *= postureRatio;
             e.posture = Math.min(e.maxPosture, e.posture * postureRatio);
-            e.dmgScale = this.difficulty.enemyDmg;
+            e.dmgScale = ENEMY_DAMAGE_SCALE * this.difficulty.enemyDmg;
         }
     }
 
@@ -739,7 +756,7 @@ class Game {
                 rgb(170, 210, 255));
             this.fx.sparks(e.x, e.y, a, 1.0, 14, 500, rgb(170, 210, 255));
             e.beingExecuted = false;
-            e.takeRaw(45, 70, a);
+            e.takeRaw(45 * PLAYER_DAMAGE_SCALE, 70, a);
         }
     }
 
@@ -1194,7 +1211,7 @@ class Game {
         g.font = 'bold 54px serif';
         this.text(g, "RONIN'S PATH", sw / 2, 90, rgb(230, 60, 50), true);
         g.font = SUB_FONT;
-        this.text(g, 'Five elite warriors hold the land. Find their strongholds (purple on the map) and cut them down.', sw / 2, 124,
+        this.text(g,         'Five elite warriors await alone in their strongholds (purple on the map). Learn their unique strikes and cut them down.', sw / 2, 124,
             rgb(225, 215, 200), true);
         const rows = [
             ['WASD', 'Move'],
@@ -1231,7 +1248,7 @@ class Game {
             'Deflects crush enemy POSTURE. Fill the posture bar and a red mark appears: strike for a DEATHBLOW.',
             'Mashing the parry button shrinks your deflect window. Rhythm beats panic. Successful deflects reset it.',
             'Perilous attacks (red kanji) cannot be blocked: dodge sweeps, and Mikiri-counter thrusts.',
-            'Enemies block and will counterattack if you mindlessly swing. Deflect their last hit for a free opening.',
+            'Enemies brace through one hit mid-swing. Break posture, catch their recovery, or deflect the final hit.',
             'Elites need two deathblows.  Defeated enemies grant EXP; every bar filled is a skill point. Death costs half your EXP.',
         ];
         for (const s of tips) {

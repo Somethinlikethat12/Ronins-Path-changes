@@ -8,6 +8,7 @@ class Effects {
         this.ps = [];
         this.petals = [];
         this.slashes = [];
+        this.thrusts = [];
         this.lines = [];
         this.rings = [];
         this.texts = [];
@@ -73,6 +74,10 @@ class Effects {
         this.slashes.push({ x, y, r, start, sweep, life, max: life, width, c });
     }
 
+    thrust(x, y, angle, len, life, width, c) {
+        this.thrusts.push({ x, y, angle, len, life, max: life, width, c });
+    }
+
     line(x1, y1, x2, y2, life, width, c) {
         this.lines.push({ x1, y1, x2, y2, life, max: life, width, c });
     }
@@ -132,7 +137,7 @@ class Effects {
                 this.ps.splice(i, 1);
             }
         }
-        for (const arr of [this.slashes, this.lines, this.rings]) {
+        for (const arr of [this.slashes, this.thrusts, this.lines, this.rings]) {
             for (let i = arr.length - 1; i >= 0; i--) if ((arr[i].life -= dt) <= 0) arr.splice(i, 1);
         }
         for (let i = this.texts.length - 1; i >= 0; i--) {
@@ -163,6 +168,31 @@ class Effects {
                 g.arc(s.x, s.y, s.r, s.start, s.start + sweepNow, sweepNow < 0);
                 g.stroke();
             }
+        }
+        for (const thrust of this.thrusts) {
+            const progress = 1 - thrust.life / thrust.max;
+            const reach = thrust.len * (0.58 + 0.42 * U.clamp(progress * 3, 0, 1));
+            const alpha = Math.min(1, progress * 8) * (1 - progress * 0.35);
+            g.save();
+            g.translate(thrust.x, thrust.y);
+            g.rotate(thrust.angle);
+            g.beginPath();
+            g.moveTo(0, -thrust.width * 0.16);
+            g.lineTo(reach * 0.72, -thrust.width * 0.36);
+            g.lineTo(reach, 0);
+            g.lineTo(reach * 0.72, thrust.width * 0.36);
+            g.lineTo(0, thrust.width * 0.16);
+            g.closePath();
+            g.fillStyle = css(U.alpha(thrust.c, alpha * 0.38));
+            g.fill();
+            setStroke(g, Math.max(1, thrust.width * 0.13), true);
+            g.strokeStyle = css(U.alpha(WHITE, alpha * 0.8));
+            strokeLine(g, 0, 0, reach, 0);
+            setStroke(g, Math.max(0.6, thrust.width * 0.07), true);
+            g.strokeStyle = css(U.alpha(thrust.c, alpha));
+            strokeLine(g, reach * 0.08, -thrust.width * 0.29, reach * 0.8, -thrust.width * 0.12);
+            strokeLine(g, reach * 0.08, thrust.width * 0.29, reach * 0.8, thrust.width * 0.12);
+            g.restore();
         }
         for (const l of this.lines) {
             const t = l.life / l.max;

@@ -5,7 +5,7 @@
  * with export/import of a .json save file as a backup that survives clearing browser data or switching browsers.
  */
 const SAVE_KEY = 'roninsPath.save.v1';
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 3;
 const SAVE_FILE_NAME = 'ronins-path-save.json';
 const MAX_SAVE_FILE_BYTES = 1000000;
 
@@ -35,7 +35,8 @@ const SaveGame = {
     },
 
     valid(d) {
-        return !!d && typeof d === 'object' && d.v === SAVE_VERSION && Number.isFinite(d.seed) && !!d.player && typeof d.player === 'object';
+        return !!d && typeof d === 'object' && (d.v === 1 || d.v === 2 || d.v === SAVE_VERSION)
+            && Number.isFinite(d.seed) && !!d.player && typeof d.player === 'object';
     },
 
     serialize(game) {
@@ -80,13 +81,18 @@ const SaveGame = {
         if (Array.isArray(d.camps)) world.camps.forEach((c, i) => { c.cleared = d.camps[i] === true; });
         if (Array.isArray(d.dead)) {
             for (const i of d.dead) {
-                const e = Number.isInteger(i) ? game.enemies[i] : undefined;
+                const e = Number.isInteger(i) ? (d.v === 1
+                    ? game.enemies.find(enemy => enemy.legacyIndex === i)
+                    : d.v === 2 ? game.enemies.find(enemy => enemy.previousIndex === i) : game.enemies[i]) : undefined;
                 if (e === undefined) continue;
                 e.hp = 0;
                 e.alive = false;
                 e.releaseToken();
                 e.setSt('DEAD');
                 e.deadT = 999;
+            }
+            if (d.v < SAVE_VERSION) for (const c of world.camps) {
+                if (c.members.every(e => e.st === 'DEAD')) c.cleared = true;
             }
         }
         game.kills = Math.trunc(num(d.kills, 0, 1e7, 0));
