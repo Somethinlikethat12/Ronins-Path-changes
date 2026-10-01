@@ -11,16 +11,16 @@ const DUEL_SNAP_EVERY = 30;
 const DUEL_HISTORY = 240;
 const LAG_PAUSE_MS = 250, LAG_RESUME_MS = 170, LAG_SILENCE_MS = 1500, LAG_RESUME_HOLD_MS = 2000, RESUME_COUNTDOWN = 1.5;
 const IN_GUARD = 1, IN_SPRINT = 2, IN_ATTACK = 4, IN_PARRY = 8, IN_DODGE = 16, IN_HEAL = 32, IN_IAI = 64, IN_ART = 128,
-    IN_DRAGON = 256, IN_READY = 512, IN_STAB = 1024;
+    IN_DRAGON = 256, IN_READY = 512, IN_STAB = 1024, IN_THROW = 2048;
 const NEUTRAL_INPUT = [0, 0, 0, 0, 0];
 const DUEL_PHASES = ['COUNTDOWN', 'FIGHT', 'KO', 'MATCH_OVER'];
-const PLAYER_STATES = ['FREE', 'ATTACK', 'ART', 'DRAGON', 'DODGE', 'STAGGER', 'HEAL', 'DEATHBLOW', 'MIKIRI', 'IAI', 'DEAD'];
+const PLAYER_STATES = ['FREE', 'ATTACK', 'THROW', 'ART', 'DRAGON', 'DODGE', 'STAGGER', 'HEAL', 'DEATHBLOW', 'MIKIRI', 'IAI', 'DEAD'];
 const PLAYER_SYNC = ['x', 'y', 'facing', 'st', 'stT', 'vx', 'vy', 'moveX', 'moveY', 'aimX', 'aimY', 'guardHeld', 'bufAttack', 'bufParry',
     'bufDodge', 'bufHeal', 'bufIai', 'bufArt', 'bufDragon', 'artIdx', 'artAtkEnd', 'dragonDone', 'combo', 'swingId', 'phase', 'swingSign',
     'comboGrace', 'guarding', 'guardStart', 'guardWindow', 'spam', 'deflectStreak', 'deflectStreakT', 'guardFlash', 'dodgeDx', 'dodgeDy',
     'dodgeHeld', 'sprinting', 'invuln', 'staggerDur', 'hurtFlash', 'postureCd', 'walkAnim', 'scarf', 'hp', 'posture', 'gourds',
     'artCharges', 'healed', 'ki', 'dbDone', 'iaiSx', 'iaiSy', 'iaiDx', 'iaiDy', 'iaiDone', 'iaiLine', 'deadT', 'beingExecuted', 'brokenT',
-    'stabAttack', 'gone'];
+    'stabAttack', 'bufThrow', 'throwDone', 'throws', 'gone'];
 const YOU_COLOR = rgb(110, 190, 255), FOE_COLOR = rgb(255, 95, 80);
 const FFA_COLORS = [rgb(255, 95, 80), rgb(120, 220, 120), rgb(255, 205, 80), rgb(205, 135, 255), rgb(90, 225, 215), rgb(255, 140, 200),
     rgb(255, 160, 70), rgb(225, 225, 225)];
@@ -34,7 +34,7 @@ function sanitizeInput(d) {
     if (!Array.isArray(d) || d.length !== 5) return NEUTRAL_INPUT;
     const n = v => (Number.isFinite(v) ? v : 0);
     return [Math.sign(n(d[0])), Math.sign(n(d[1])), Math.round(U.clamp(n(d[2]), -5000, 5000)), Math.round(U.clamp(n(d[3]), -5000, 5000)),
-        n(d[4]) & 2047];
+        n(d[4]) & 4095];
 }
 
 /** Circular ring-out-proof arena centered on the origin. */
@@ -85,6 +85,11 @@ class DuelSide {
 
     playerHitCheck(p, atk) {
         for (const f of this.foes) this.duel.hitCheck(p, f, atk);
+    }
+    projectileHitCheck(p, atk) {
+        const { target, range } = projectileTarget(p, atk, this.foes, this.world);
+        if (target !== null) this.duel.hitCheck(p, target, atk);
+        return range;
     }
     mikiriCandidate(p, dx, dy) {
         for (const foe of this.foes) {
@@ -312,6 +317,7 @@ class Duel {
         if (inp.hit('KeyF')) b |= IN_IAI;
         if (inp.hit('KeyR')) b |= IN_ART;
         if (inp.hit('KeyG')) b |= IN_DRAGON;
+        if (inp.hit('KeyT')) b |= IN_THROW;
         if (inp.hit('Enter') || inp.hit('NumpadEnter')) b |= IN_READY;
         inp.endTick();
         return sanitizeInput([mx, my, wx, wy, b]);
@@ -479,6 +485,7 @@ class Duel {
         if (b & IN_ART) p.bufArt = 0.2;
         if (b & IN_DRAGON) p.bufDragon = 0.15;
         if (b & IN_STAB) p.bufStab = 0.2;
+        if (b & IN_THROW) p.bufThrow = 0.2;
     }
 
     nearestFoe(p) {
@@ -580,7 +587,7 @@ class Duel {
             p.aimY = -y;
             p.moveX = p.moveY = 0;
             p.guardHeld = p.dodgeHeld = p.guarding = p.sprinting = false;
-            p.bufAttack = p.bufParry = p.bufDodge = p.bufHeal = p.bufIai = p.bufArt = p.bufDragon = p.bufStab = 0;
+            p.bufAttack = p.bufParry = p.bufDodge = p.bufHeal = p.bufIai = p.bufArt = p.bufDragon = p.bufStab = p.bufThrow = 0;
             p.stabAttack = false;
             p.brokenT = 0;
             p.beingExecuted = false;
@@ -1092,6 +1099,8 @@ class Duel {
         }
         g.font = SMALL_FONT;
         this.text(g, '[Q] heal', hx + me.maxGourds * 24 + 8, hy + 18, rgb(220, 200, 170), false);
+        this.text(g, '[T] Shuriken ' + me.throws + '/' + me.maxThrows, hx, hy + 42,
+            me.throws ? me.throwable.color : rgb(150, 140, 130), false);
         const art = me.art, canArt = me.artCharges >= art.cost;
         g.font = 'bold 15px serif';
         this.text(g, art.name + '  ' + me.artCharges + '/' + art.cost + (canArt ? '  READY  [R] / Block + Attack' : '  (deflect to charge)'),

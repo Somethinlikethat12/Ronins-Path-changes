@@ -51,6 +51,7 @@ const SaveGame = {
                 y: dead ? sp.y + 60 : p.y,
                 hp: dead ? p.maxHp : p.hp,
                 gourds: dead ? p.maxGourds : p.gourds,
+                throws: dead ? p.maxThrows : p.throws,
                 artCharges: dead ? 0 : p.artCharges,
                 ki: dead ? 0 : p.ki,
             },
@@ -114,6 +115,7 @@ const SaveGame = {
         const s = d.player;
         p.hp = num(s.hp, 1, p.maxHp, p.maxHp);
         p.gourds = Math.trunc(num(s.gourds, 0, p.maxGourds, p.maxGourds));
+        p.throws = Math.trunc(num(s.throws, 0, p.maxThrows, p.maxThrows));
         p.artCharges = Math.trunc(num(s.artCharges, 0, p.maxArtCharges, 0));
         p.ki = num(s.ki, 0, 100, 0);
         p.x = num(s.x, 0, WORLD_SIZE, p.x);

@@ -97,6 +97,27 @@ const Draw = {
         g.stroke();
     },
 
+    weapon(g, hx, hy, ang, weapon, color) {
+        if (weapon.id === 'spear') return this.spear(g, hx, hy, ang, weapon.len, 26);
+        if (weapon.id === 'hammer') return this.club(g, hx, hy, ang, weapon.len);
+        if (weapon.id === 'axe') {
+            const c = Math.cos(ang), s = Math.sin(ang), x = hx + c * weapon.len, y = hy + s * weapon.len;
+            setStroke(g, 4, true);
+            g.strokeStyle = 'rgb(100,70,44)';
+            strokeLine(g, hx - c * 7, hy - s * 7, x, y);
+            g.fillStyle = css(color || weapon.color);
+            g.beginPath();
+            g.moveTo(x - s * 5, y + c * 5);
+            g.lineTo(x + c * 9 - s * 13, y + s * 9 + c * 13);
+            g.lineTo(x + c * 9 + s * 13, y + s * 9 - c * 13);
+            g.lineTo(x + s * 5, y - c * 5);
+            g.closePath();
+            g.fill();
+            return;
+        }
+        this.katana(g, hx, hy, ang, weapon.len, color || weapon.color);
+    },
+
     katana(g, hx, hy, ang, len, blade) {
         const c = Math.cos(ang), s = Math.sin(ang);
         setStroke(g, 4.5, true);

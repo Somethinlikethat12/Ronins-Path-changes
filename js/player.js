@@ -10,7 +10,27 @@ const P_COMBO = [
 ];
 const P_STAB = new Attack('heavy-stab', 0.72, 0.18, 0.68, 126, 34, 30, 14, 560).markPerilous().markThrust();
 
-// Player states: 'FREE' | 'ATTACK' | 'ART' | 'DRAGON' | 'DODGE' | 'STAGGER' | 'HEAL' | 'DEATHBLOW' | 'MIKIRI' | 'IAI' | 'DEAD'
+function projectileTarget(p, atk, foes, world) {
+    const dx = Math.cos(p.facing), dy = Math.sin(p.facing);
+    let target = null, range = atk.range;
+    for (const foe of foes) {
+        if (foe.st === 'DEAD') continue;
+        const vx = foe.x - p.x, vy = foe.y - p.y, along = vx * dx + vy * dy;
+        const across = vx * dy - vy * dx, radius = foe.r + 3;
+        if (along < p.r || along > range + radius || Math.abs(across) > radius) continue;
+        const hit = along - Math.sqrt(radius * radius - across * across);
+        if (hit < range) {
+            target = foe;
+            range = Math.max(p.r, hit);
+        }
+    }
+    if (world.solidAt) for (let d = p.r + 4; d <= range; d += 6) {
+        if (world.solidAt(p.x + dx * d, p.y + dy * d)) return { target: null, range: d };
+    }
+    return { target, range };
+}
+
+// Player states: 'FREE' | 'ATTACK' | 'THROW' | 'ART' | 'DRAGON' | 'DODGE' | 'STAGGER' | 'HEAL' | 'DEATHBLOW' | 'MIKIRI' | 'IAI' | 'DEAD'
 class Player extends Actor {
     constructor(g, x, y) {
         super();
@@ -40,6 +60,8 @@ class Player extends Actor {
         this.bufArt = 0;
         this.bufDragon = 0;
         this.bufStab = 0;
+        this.bufThrow = 0;
+        this.throwDone = false;
         this.mouseAttackPending = false;
         // combat art
         this.curArt = null;
@@ -81,6 +103,7 @@ class Player extends Actor {
         this.baseMaxHp = 100;
         this.baseGourds = 3;
         this.gourds = 0;
+        this.throws = 0;
         this.artCharges = 0;
         this.healed = false;
         this.ki = 0;
@@ -98,6 +121,7 @@ class Player extends Actor {
         this.applyLoadout();
         this.hp = this.maxHp;
         this.gourds = this.maxGourds;
+        this.throws = this.maxThrows;
     }
 
     /** Recompute stats and attacks from the equipped gear and learned skills. */
@@ -118,6 +142,9 @@ class Player extends Actor {
         this.maxPosture = s.maxPosture;
         this.maxGourds = s.gourds;
         this.gourds = Math.min(this.gourds, this.maxGourds);
+        this.throwable = lo.throwableDef();
+        this.maxThrows = this.throwable.max;
+        this.throws = Math.min(this.throws, this.maxThrows);
         this.maxArtCharges = s.charges;
         this.artCharges = Math.min(this.artCharges, this.maxArtCharges);
         this.speed = 245 * s.move;
@@ -132,16 +159,20 @@ class Player extends Actor {
         this.dragonFlash = s.dragonFlash;
         this.lastStand = s.lastStand;
         this.dragonDamage = 58 * s.dmg * s.artDmg;
-        this.comboAtk = P_COMBO.map((a, i) => {
+        this.sword = lo.swordDef();
+        this.comboAtk = (this.sword.combo || P_COMBO).map((a, i) => {
             const b = scaledAttack(a, s);
             b.heavy = i === 2;
             return b;
         });
-        this.stabAtk = scaledAttack(P_STAB, s);
+        const heavy = this.sword.id === 'hammer' || this.sword.id === 'axe'
+            ? new Attack('heavy-smash', 0.72, 0.18, 0.68, 110, 110, 36, 38, 350) : P_STAB;
+        this.stabAtk = scaledAttack(heavy, s);
+        this.throwAtk = new Attack(this.throwable.id, 0, 0, 0, this.throwable.range, 0,
+            this.throwable.damage * s.dmg, this.throwable.posture * s.post, 0);
         this.art = lo.artDef();
         const artStats = Object.assign({}, s, { dmg: s.dmg * s.artDmg });
         this.artAtks = this.art.hits.map(h => scaledAttack(h.atk, artStats));
-        this.sword = lo.swordDef();
     }
 
     sneaking() { return this.st === 'FREE' && this.guarding && Math.hypot(this.vx, this.vy) < 160; }
@@ -184,6 +215,7 @@ class Player extends Actor {
         if (inp.hit('KeyF')) this.bufIai = 0.15;
         if (inp.hit('KeyR')) this.bufArt = 0.2;
         if (inp.hit('KeyG')) this.bufDragon = 0.15;
+        if (inp.hit('KeyT')) this.bufThrow = 0.2;
     }
 
     update(dt) {
@@ -197,6 +229,7 @@ class Player extends Actor {
         this.bufArt -= dt;
         this.bufDragon -= dt;
         this.bufStab -= dt;
+        this.bufThrow -= dt;
         this.invuln -= dt;
         this.hurtFlash -= dt;
         this.guardFlash -= dt;
@@ -219,6 +252,7 @@ class Player extends Actor {
         switch (this.st) {
             case 'FREE': this.free(dt, aimAng); break;
             case 'ATTACK': this.attack(dt, aimAng); break;
+            case 'THROW': this.throwUpdate(); break;
             case 'ART': this.artUpdate(dt, aimAng); break;
             case 'DRAGON': this.dragonUpdate(dt); break;
             case 'DODGE': {
@@ -288,6 +322,7 @@ class Player extends Actor {
     toFree() {
         this.st = 'FREE';
         this.stT = 0;
+        this.throwDone = false;
     }
     free(dt, aimAng) {
         const g = this.g;
@@ -312,6 +347,16 @@ class Player extends Actor {
             // Sekiro-style: attack while holding block performs the combat art
             if (this.guardHeld && g.deathblowTarget() === null) this.tryArt(aimAng);
             else this.beginAttackOrDeathblow(this.comboGrace > 0 && this.combo >= 0 && this.combo < 2 ? this.combo + 1 : 0);
+        } else if (this.bufThrow > 0) {
+            this.bufThrow = 0;
+            if (this.throws > 0) {
+                this.st = 'THROW';
+                this.stT = 0;
+                this.throwDone = false;
+                this.facing = aimAng;
+                this.guarding = false;
+                this.hitSet.clear();
+            } else g.fx.text('Throwing weapons empty', this.x, this.y - 40, rgb(200, 200, 200), 13);
         } else if (this.bufStab > 0) {
             this.bufStab = 0;
             this.startStab(aimAng);
@@ -344,6 +389,19 @@ class Player extends Actor {
         this.guardWindow = U.clamp(this.perfectWindow - Math.max(0, this.spam - 1.2) * 0.04, 0.05, this.perfectWindow);
         this.guardStart = this.g.time;
         this.guarding = true;
+    }
+
+    throwUpdate() {
+        if (this.stT >= 0.14 && !this.throwDone) {
+            this.throwDone = true;
+            this.throws--;
+            const t = this.throwable, g = this.g, dx = Math.cos(this.facing), dy = Math.sin(this.facing);
+            const reach = g.projectileHitCheck(this, this.throwAtk);
+            g.fx.line(this.x + dx * this.r, this.y + dy * this.r, this.x + dx * reach, this.y + dy * reach,
+                0.22, t.id === 'throwingaxe' ? 5 : 2, t.color);
+            g.sfx.play('SLASH');
+        }
+        if (this.stT >= 0.36) this.toFree();
     }
 
     beginAttackOrDeathblow(idx) {
@@ -743,9 +801,11 @@ class Player extends Actor {
         this.hp = this.maxHp;
         this.posture = 0;
         this.gourds = this.maxGourds;
+        this.throws = this.maxThrows;
         this.artCharges = 0;
         this.st = 'FREE';
         this.stT = 0;
+        this.throwDone = false;
         this.vx = this.vy = 0;
         this.invuln = 1.5;
         this.ki = 0;
@@ -789,6 +849,9 @@ class Player extends Actor {
             blade = facing + (this.stT < 0.13 ? 1.4 : -0.6);
         } else if (st === 'STAGGER') {
             blade = facing + 1.6;
+        } else if (st === 'THROW') {
+            handRel = this.stT < 0.14 ? -1.1 : 0.2;
+            blade = facing + 0.6;
         }
 
         Draw.shadow(g2, x, y, r);
@@ -808,7 +871,7 @@ class Player extends Actor {
 
         const hx = x + Math.cos(facing + handRel) * r * 0.9, hy = y + Math.sin(facing + handRel) * r * 0.9;
         const sword = this.sword;
-        Draw.katana(g2, hx, hy, blade, sword.len, this.guardFlash > 0 ? rgb(255, 230, 150) : sword.color);
+        Draw.weapon(g2, hx, hy, blade, sword, this.guardFlash > 0 ? rgb(255, 230, 150) : sword.color);
         if (st === 'FREE' && this.guarding && this.g.time - this.guardStart <= this.guardWindow) {
             g2.fillStyle = 'rgba(255,240,200,0.353)';
             fillCircle(g2, hx, hy, 14);

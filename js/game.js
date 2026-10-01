@@ -411,12 +411,13 @@ class Game {
             s.discovered = true;
             player.hp = player.maxHp;
             player.gourds = player.maxGourds;
+            player.throws = player.maxThrows;
             player.posture = 0;
             player.lastStandUsed = false;
             this.sfx.play('SHRINE');
             this.fx.ring(s.x, s.y, 20, 160, 1.0, 4, rgb(255, 220, 140));
             this.fx.heal(player.x, player.y);
-            this.banner('Rested', s.name + '  -  HP & gourds restored', rgb(255, 220, 140));
+            this.banner('Rested', s.name + '  -  HP, gourds & throws restored', rgb(255, 220, 140));
             this.saveNow(true);
         }
     }
@@ -595,6 +596,17 @@ class Game {
             }
         }
         if (this.coop !== null && this.coop.settings.friendlyFire) this.coop.friendlyHitCheck(p, atk);
+    }
+
+    projectileHitCheck(p, atk) {
+        const foes = this.coop && this.coop.settings.friendlyFire ? this.enemies.concat(this.coop.party) : this.enemies;
+        const { target, range } = projectileTarget(p, atk, foes, this.world);
+        if (target !== null) {
+            if (target instanceof Player) this.coop.friendlyStrike(p, target, atk);
+            else if (this.coop && !this.coop.host) this.coop.strike(target, atk);
+            else target.takeHit(p, atk);
+        }
+        return range;
     }
 
     mikiriCandidate(p, dx, dy) {
@@ -961,6 +973,8 @@ class Game {
         }
         g.font = SMALL_FONT;
         this.text(g, '[Q] heal', hx + p.maxGourds * 24 + 6, ky + 32, rgb(220, 200, 170), false);
+        this.text(g, '[T] ' + p.throwable.name + ' ' + p.throws + '/' + p.maxThrows,
+            hx, ky + 54, p.throws ? p.throwable.color : rgb(150, 140, 130), false);
 
         // --- combat art charges (earned by deflecting) ---
         const ay = hy - 28, art = p.art, canArt = p.artCharges >= art.cost;
@@ -1190,12 +1204,13 @@ class Game {
             ['Space / L', 'Tap to dodge (invincible frames, dashes forward with no direction). Hold to sprint.'],
             ['Dodge INTO a thrust', 'MIKIRI COUNTER a perilous thrust (red kanji)'],
             ['Q', 'Drink healing gourd'],
+            ['T', 'Throw equipped weapon (limited; refills at shrines)'],
             ['F', 'Iai Flash - dash-slash through enemies (needs full Ki)'],
             ['G', 'Dragon Flash - a long-range cut (learn it in the Skill Tree, needs full Ki)'],
-            ['H', 'Heavy perilous stab - dodge into it to Mikiri counter'],
+            ['Hold Left Click', 'Heavy strike (katana and spear thrusts can be Mikiri-countered)'],
             ['Hold Block + Attack / R', 'Combat Art - charged by deflects & Mikiri counters, not spammable'],
-            ['Tab / I', 'Equipment (arts, sword, armor, charm, appearance) and the Skill Tree'],
-            ['E', 'Rest at shrine (heal, refill gourds, set respawn) - not while enemies are near'],
+            ['Tab / I', 'Equipment (arts, weapon, throws, armor, charm, appearance) and the Skill Tree'],
+            ['E', 'Rest at shrine (heal, refill gourds and throws) - not while enemies are near'],
             ['Hold block + walk', 'Sneak. Reach an unaware enemy for a STEALTH DEATHBLOW'],
         ];
         let y = 178;

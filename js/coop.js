@@ -52,7 +52,7 @@ class Coop {
         const existing = this.bodies.get(id);
         if (existing !== undefined) return existing;
         const g = this.game, b = new Player(g, g.player.x + 45, g.player.y);
-        b.g = Object.assign(Object.create(g), { onPlayerDeath() {} });
+        b.g = Object.assign(Object.create(g), { loadout: g.loadout.clone(), onPlayerDeath() {} });
         b.cur = b.comboAtk[0];
         b.curArt = b.art;
         b.time = g.time;
@@ -76,6 +76,23 @@ class Coop {
         return out;
     }
 
+    static playerData(p) {
+        return Object.assign(Coop.fields(p, COOP_PLAYER_FIELDS),
+            { sword: p.g.loadout.sword, throwable: p.g.loadout.throwable });
+    }
+
+    static syncGear(p, data) {
+        if (!data || typeof data !== 'object') return;
+        const lo = p.g.loadout;
+        const weapon = SWORDS.find(w => w.id === data.sword);
+        const throwable = THROWABLES.find(w => w.id === data.throwable);
+        if ((weapon && lo.sword !== weapon.id) || (throwable && lo.throwable !== throwable.id)) {
+            if (weapon) lo.sword = weapon.id;
+            if (throwable) lo.throwable = throwable.id;
+            p.applyLoadout();
+        }
+    }
+
     static apply(obj, data, names) {
         if (!data || typeof data !== 'object') return;
         for (const key of names) {
@@ -93,10 +110,10 @@ class Coop {
         if (this.host) {
             const game = this.game, p = game.player, party = this.party;
             const near = (x, y) => U.dist(x, y, p.x, p.y) <= 2200 || party.some(b => U.dist(x, y, b.x, b.y) <= 2200);
-            const players = [[this.slot, Coop.fields(p, COOP_PLAYER_FIELDS)]];
+            const players = [[this.slot, Coop.playerData(p)]];
             const health = [];
             for (const [id, b] of this.bodies) {
-                players.push([id, Coop.fields(b, COOP_PLAYER_FIELDS)]);
+                players.push([id, Coop.playerData(b)]);
                 health.push([id, { hp: b.hp, posture: b.posture, st: b.st === 'DEAD' ? 'DEAD' : null }]);
             }
             this.link.send({ t: 'coop-world', settings: game.coopSettings, players, health, enemies: game.enemies.map((e, i) => {
@@ -110,8 +127,8 @@ class Coop {
             camps: game.world.camps.map(c => c.cleared), shrines: game.world.shrines.map(s => s.discovered) });
         } else {
             const p = this.game.player;
-            this.link.send({ t: 'coop-player', player: Coop.fields(p, COOP_PLAYER_FIELDS),
-                gourds: p.gourds, guardAge: this.game.time - p.guardStart,
+            this.link.send({ t: 'coop-player', player: Coop.playerData(p),
+                gourds: p.gourds, throws: p.throws, guardAge: this.game.time - p.guardStart,
                 shrines: this.game.world.shrines.map(s => s.discovered) });
         }
     }
@@ -131,6 +148,7 @@ class Coop {
         if (r.st === 'DEAD' && p.st !== 'DEAD' && !sawDead) return;
         const oldGourds = r.gourds;
         const oldHp = r.hp;
+        Coop.syncGear(r, p);
         Coop.apply(r, p, COOP_PLAYER_FIELDS);
         r.cur = r.stabAttack ? r.stabAtk : (r.comboAtk[U.clamp(r.combo, 0, 2)] || r.comboAtk[0]);
         r.curArt = r.art;
@@ -149,6 +167,9 @@ class Coop {
         } else if (r.st !== 'DEAD') r.hp = Math.min(oldHp, r.hp);
         if (Number.isInteger(d.gourds) && d.gourds > r.gourds && d.gourds <= r.maxGourds
             && this.game.world.nearShrine(r.x, r.y) < 120) r.gourds = d.gourds;
+        if (Number.isInteger(d.throws) && d.throws >= 0 && d.throws <= r.maxThrows
+            && (d.throws <= r.throws || (atShrine && p.st === 'FREE'
+                && !this.game.enemies.some(e => e.st !== 'DEAD' && U.dist(e.x, e.y, p.x, p.y) < 480)))) r.throws = d.throws;
         if (Number.isFinite(d.guardAge)) r.guardStart = this.game.time - Math.max(0, d.guardAge);
         if (Array.isArray(d.shrines)) this.game.world.shrines.forEach((s, i) => { if (d.shrines[i] === true) s.discovered = true; });
     }
@@ -165,6 +186,7 @@ class Coop {
                 const b = this.bodyFor(entry[0]);
                 if (b === null) continue;
                 seen.add(entry[0]);
+                Coop.syncGear(b, entry[1]);
                 Coop.apply(b, entry[1], COOP_PLAYER_FIELDS);
                 b.cur = b.stabAttack ? b.stabAtk : (b.comboAtk[U.clamp(b.combo, 0, 2)] || b.comboAtk[0]);
                 b.curArt = b.art;
@@ -305,8 +327,16 @@ class Coop {
             const tol = atk.arc / 2 + Math.asin(Math.min(1, b.r / Math.max(d, 1)));
             if (Math.abs(U.angDiff(p.facing, p.angleTo(b))) > tol) continue;
             p.hitSet.add(b);
-            if (this.host) this.resolveFriendlyFire(p, b, atk);
-            else this.link.send({ t: 'coop-ff', id, atk: { damage: atk.damage, posture: atk.posture, range: atk.range, arc: atk.arc } });
+            this.friendlyStrike(p, b, atk);
+        }
+    }
+
+    friendlyStrike(p, b, atk) {
+        if (this.host) this.resolveFriendlyFire(p, b, atk);
+        else {
+            const id = [...this.bodies].find(([, body]) => body === b)?.[0];
+            if (id !== undefined) this.link.send({ t: 'coop-ff', id, atk: {
+                damage: atk.damage, posture: atk.posture, range: atk.range, arc: atk.arc } });
         }
     }
 
@@ -352,7 +382,8 @@ class Coop {
                 || !Number.isFinite(a.arc) || a.damage < 0 || a.damage > 120 || a.posture < 0 || a.posture > 140
                 || a.range < 0 || a.range > 280 || a.arc < 0 || a.arc > TAU
                 || p.distTo(e) > a.range + e.r + 30
-                || Math.abs(U.angDiff(p.facing, p.angleTo(e))) > a.arc / 2 + 0.5) return;
+                || Math.abs(U.angDiff(p.facing, p.angleTo(e))) > a.arc / 2
+                    + Math.asin(Math.min(1, e.r / Math.max(p.distTo(e), 1))) + 0.5) return;
             e.takeHit(p, a);
         } else if (d.kind === 'deathblow' && (e.st === 'BROKEN' || game.stealthable(e)) && p.distTo(e) < 120 + e.r) {
             game.executeDeathblow(p, e);

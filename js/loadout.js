@@ -53,6 +53,30 @@ const SWORDS = [
         desc: 'Short and light. Chains cuts in a blur.', info: 'Much faster swings  -  Less damage and reach' },
     { id: 'sorrow', name: 'Blade of Sorrow', kanji: '哀刃', unlock: 4, dmg: 1.35, post: 1.5, spd: 1.05, reach: 6, len: 62, color: rgb(210, 70, 80),
         desc: 'A cursed edge that shatters any guard.', info: 'Damage +35%  -  Posture damage +50%' },
+    { id: 'spear', name: 'Ash Spear', kanji: '槍', unlock: 0, dmg: 0.85, post: 0.85, spd: 1.08, reach: 38, len: 76, color: rgb(205, 220, 225),
+        combo: [new Attack('spear1', 0.12, 0.10, 0.25, 112, 42, 15, 12, 150),
+            new Attack('spear2', 0.12, 0.10, 0.25, 112, 42, 15, 12, 150),
+            new Attack('spear3', 0.20, 0.12, 0.40, 125, 54, 25, 24, 210)],
+        desc: 'Keep enemies at a distance with narrow thrusts.', info: 'Reach +38  -  Narrow arc  -  Less posture damage' },
+    { id: 'hammer', name: 'Iron Hammer', kanji: '鎚', unlock: 0, dmg: 1.25, post: 1.65, spd: 1.45, reach: -8, len: 48, color: rgb(175, 175, 170),
+        combo: [new Attack('hammer1', 0.18, 0.12, 0.32, 84, 110, 17, 20, 120),
+            new Attack('hammer2', 0.20, 0.12, 0.32, 84, 110, 17, 20, 120),
+            new Attack('hammer3', 0.28, 0.14, 0.52, 96, 140, 27, 32, 170)],
+        desc: 'Slow crushing blows break guards.', info: 'Posture +65%  -  Slow  -  Short reach' },
+    { id: 'axe', name: 'Woodsman Axe', kanji: '斧', unlock: 0, dmg: 1.18, post: 1.3, spd: 1.22, reach: -3, len: 52, color: rgb(205, 200, 190),
+        combo: [new Attack('axe1', 0.14, 0.11, 0.28, 84, 180, 17, 15, 170),
+            new Attack('axe2', 0.14, 0.11, 0.28, 84, 180, 17, 15, 170),
+            new Attack('axe3', 0.24, 0.14, 0.45, 98, 240, 27, 27, 220)],
+        desc: 'Broad, heavy chops catch groups.', info: 'Damage +18%  -  Wide arc  -  Slower' },
+];
+
+const THROWABLES = [
+    { id: 'shuriken', name: 'Shuriken', kanji: '手裏剣', unlock: 0, max: 5, range: 250, damage: 12, posture: 10, color: rgb(185, 220, 240),
+        desc: 'Quick steel stars for distant targets.', info: '5 throws  -  Fast  -  Refill at shrines' },
+    { id: 'kunai', name: 'Kunai', kanji: '苦無', unlock: 0, max: 4, range: 270, damage: 20, posture: 12, color: rgb(225, 205, 170),
+        desc: 'A heavier knife with greater reach.', info: '4 throws  -  More damage  -  Refill at shrines' },
+    { id: 'throwingaxe', name: 'Throwing Axe', kanji: '飛斧', unlock: 0, max: 3, range: 210, damage: 28, posture: 28, color: rgb(230, 170, 130),
+        desc: 'A short throw that batters guards.', info: '3 throws  -  High posture damage  -  Refill at shrines' },
 ];
 
 const ARMORS = [
@@ -80,7 +104,8 @@ const CHARMS = [
 
 const EQUIP_SLOTS = [
     { field: 'art', label: 'Combat Art', list: ARTS },
-    { field: 'sword', label: 'Sword', list: SWORDS },
+    { field: 'sword', label: 'Weapon', list: SWORDS },
+    { field: 'throwable', label: 'Throw', list: THROWABLES },
     { field: 'armor', label: 'Armor', list: ARMORS },
     { field: 'charm', label: 'Charm', list: CHARMS },
 ];
@@ -98,6 +123,7 @@ class Loadout {
     constructor() {
         this.art = ARTS[0].id;
         this.sword = SWORDS[0].id;
+        this.throwable = THROWABLES[0].id;
         this.armor = ARMORS[0].id;
         this.charm = CHARMS[0].id;
         this.look = { robe: 0, scarf: 0, hatStyle: 0, hat: 0 };
@@ -112,6 +138,7 @@ class Loadout {
 
     artDef() { return findItem(ARTS, this.art); }
     swordDef() { return findItem(SWORDS, this.sword); }
+    throwableDef() { return findItem(THROWABLES, this.throwable); }
     armorDef() { return findItem(ARMORS, this.armor); }
     charmDef() { return findItem(CHARMS, this.charm); }
     color(key) { return LOOKS.find(l => l.key === key).colors[this.look[key]]; }
@@ -123,7 +150,7 @@ class Loadout {
     }
 
     toData() {
-        return { art: this.art, sword: this.sword, armor: this.armor, charm: this.charm, look: Object.assign({}, this.look) };
+        return { art: this.art, sword: this.sword, throwable: this.throwable, armor: this.armor, charm: this.charm, look: Object.assign({}, this.look) };
     }
 
     /** Last-used gear and look, used when starting a fresh game (only gear that needs no elite kills). */
@@ -196,7 +223,7 @@ function drawRonin(g, x, y, r, facing, lo, time) {
     Draw.shadow(g, x, y, r);
     Draw.scarf(g, x, y, r, facing, time * 5, lo.color('scarf'));
     Draw.body(g, x, y, r, facing, lo.color('robe'), lo.armorDef().shoulder, lo.color('hat'), lo.look.hatStyle, 0);
-    Draw.katana(g, x + Math.cos(facing + 0.9) * r * 0.9, y + Math.sin(facing + 0.9) * r * 0.9, facing + 0.55, sw.len, sw.color);
+    Draw.weapon(g, x + Math.cos(facing + 0.9) * r * 0.9, y + Math.sin(facing + 0.9) * r * 0.9, facing + 0.55, sw);
 }
 
 const STAT_ROWS = [
@@ -223,8 +250,8 @@ class EquipMenu {
         this.g = game;
         this.open = false;
         this.tab = 0;
-        this.sel = [0, 0, 0, 0, 0, 0];
-        this.scroll = [0, 0, 0, 0, 0, 0];
+        this.sel = new Array(EQUIP_SLOTS.length + 2).fill(0);
+        this.scroll = new Array(EQUIP_SLOTS.length + 2).fill(0);
         this.rects = { tab: -1, tabs: [], rows: [], swatches: [] };
         this.lastMx = -1;
         this.lastMy = -1;
@@ -347,10 +374,11 @@ class EquipMenu {
         if (g.loadout[slot.field] === it.id) return;
         g.loadout[slot.field] = it.id;
         g.player.applyLoadout();
+        if (slot.field === 'throwable') this.note(it.name + ' equipped  -  rest at a shrine to refill');
+        else this.note(it.name + ' equipped');
         g.loadout.save();
         g.saveSoon();
         g.sfx.play('SLASH');
-        this.note(it.name + ' equipped');
     }
 
     setLook(row, v) {

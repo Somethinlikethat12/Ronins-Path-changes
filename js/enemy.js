@@ -590,7 +590,7 @@ class Enemy extends Actor {
         const neutral = wasAware && (this.st === 'ENGAGE' || this.st === 'ALERT' || this.st === 'RETURN');
         if (neutral && !pa.pierce && this.rnd.nextDouble() < (this.blockChance + this.blockStreak * 0.1) * (pa.art ? 0.5 : 1)) {
             this.facing = ang + Math.PI;
-            if (this.elite && !pa.art && this.blockStreak >= 1 && this.rnd.nextDouble() < 0.55) {
+            if (this.elite && !pa.art && pa.arc > 0 && this.blockStreak >= 1 && this.rnd.nextDouble() < 0.55) {
                 g.fx.sparks(cx, cy, ang + Math.PI, 2.2, 22, 480, rgb(255, 120, 200));
                 g.sfx.play('CLANG');
                 g.hitstop(0.07);
