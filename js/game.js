@@ -47,6 +47,7 @@ class Game {
         this.hpGhost = 100;
         this.flashColor = WHITE;
         this.paused = false;
+        this.pauseRects = [];
         this.showHelp = true;
         this.kills = 0;
         this.elitesSlain = 0;
@@ -274,6 +275,42 @@ class Game {
         this.saveNoteT = ok ? 2.2 : 5;
     }
 
+    activatePauseAction(action) {
+        if (action === 'resume') {
+            this.paused = false;
+        } else if (action === 'equipment') {
+            this.paused = false;
+            this.menu.show();
+        } else if (action === 'controls') {
+            this.showHelp = true;
+        } else if (action === 'save' && !this.guestJourney) {
+            this.saveNow(true);
+        } else if (action === 'export' && !this.guestJourney) {
+            SaveGame.exportFile(this);
+            this.note('Save file exported: ' + SAVE_FILE_NAME, true);
+        } else if (action === 'import' && !this.guestJourney) {
+            SaveGame.importFile(msg => this.note(msg, false));
+        } else if (action === 'main-menu') {
+            this.saveNow(false);
+            location.replace(location.href.split(/[?#]/)[0]);
+        } else if (action === 'reset' && (!this.coop || this.coop.host)) {
+            if (this.resetMapConfirmT > 0) {
+                this.resetMapConfirmT = 0;
+                this.resetMap();
+            } else {
+                this.resetMapConfirmT = 3;
+                this.note('Select Reset Map again to confirm (keeps gear, skills & EXP)', true);
+            }
+        } else if (this.coop && this.coop.host) {
+            const s = this.coopSettings;
+            if (action === 'friendly-fire') this.setCoopSettings({ friendlyFire: !s.friendlyFire });
+            if (action === 'enemy-down') this.setCoopSettings({ enemyScale: s.enemyScale - 5 });
+            if (action === 'enemy-up') this.setCoopSettings({ enemyScale: s.enemyScale + 5 });
+            if (action === 'count-down') this.setCoopSettings({ countScale: s.countScale - 5 });
+            if (action === 'count-up') this.setCoopSettings({ countScale: s.countScale + 5 });
+        }
+    }
+
     // ================= update =================
     zoom() { return 1.0 + this.zoomKickV; }
 
@@ -300,33 +337,31 @@ class Game {
             return;
         }
         if (this.paused && !this.showHelp) {
-            if (inp.hit('KeyS') && !this.guestJourney) this.saveNow(true);
-            if (inp.hit('KeyX') && !this.guestJourney) {
-                SaveGame.exportFile(this);
-                this.note('Save file exported: ' + SAVE_FILE_NAME, true);
-            }
-            if (inp.hit('KeyL') && !this.guestJourney) SaveGame.importFile(msg => this.note(msg, false));
-            if (inp.hit('KeyQ')) {
-                this.saveNow(false);
-                location.replace(location.href.split(/[?#]/)[0]);
+            if (inp.hit('Tab') || inp.hit('KeyI')) {
+                this.activatePauseAction('equipment');
                 return;
             }
-            if (inp.hit('KeyM') && (!this.coop || this.coop.host)) {
-                if (this.resetMapConfirmT > 0) {
-                    this.resetMapConfirmT = 0;
-                    this.resetMap();
-                } else {
-                    this.resetMapConfirmT = 3;
-                    this.note('Press M again to reset the map (keeps gear, skills & EXP)', true);
-                }
+            if (inp.hit('KeyS')) this.activatePauseAction('save');
+            if (inp.hit('KeyX')) this.activatePauseAction('export');
+            if (inp.hit('KeyL')) this.activatePauseAction('import');
+            if (inp.hit('KeyQ')) {
+                this.activatePauseAction('main-menu');
+                return;
             }
+            if (inp.hit('KeyM')) this.activatePauseAction('reset');
             if (this.coop && this.coop.host) {
-                const s = this.coopSettings;
-                if (inp.hit('KeyO')) this.setCoopSettings({ friendlyFire: !s.friendlyFire });
-                if (inp.hit('BracketLeft')) this.setCoopSettings({ enemyScale: s.enemyScale - 5 });
-                if (inp.hit('BracketRight')) this.setCoopSettings({ enemyScale: s.enemyScale + 5 });
-                if (inp.hit('Semicolon')) this.setCoopSettings({ countScale: s.countScale - 5 });
-                if (inp.hit('Quote')) this.setCoopSettings({ countScale: s.countScale + 5 });
+                if (inp.hit('KeyO')) this.activatePauseAction('friendly-fire');
+                if (inp.hit('BracketLeft')) this.activatePauseAction('enemy-down');
+                if (inp.hit('BracketRight')) this.activatePauseAction('enemy-up');
+                if (inp.hit('Semicolon')) this.activatePauseAction('count-down');
+                if (inp.hit('Quote')) this.activatePauseAction('count-up');
+            }
+            if (inp.mouseHit(1)) {
+                const hit = this.pauseRects.find(r => inp.mx >= r.x && inp.mx <= r.x + r.w && inp.my >= r.y && inp.my <= r.y + r.h);
+                if (hit && !hit.disabled) {
+                    this.activatePauseAction(hit.action);
+                    return;
+                }
             }
         }
         if (this.menu.open) {
@@ -1125,34 +1160,111 @@ class Game {
             }
         }
 
-        if (this.paused && !this.showHelp) {
-            g.fillStyle = 'rgba(0,0,0,0.588)';
-            g.fillRect(0, 0, sw, sh);
-            g.font = TITLE_FONT;
-            this.text(g, 'PAUSED', sw / 2, sh / 2, WHITE, true);
-            g.font = SUB_FONT;
-            this.text(g, 'Esc to resume   -   H for controls', sw / 2, sh / 2 + 40, rgb(220, 210, 200), true);
-            g.font = HUD_FONT;
-            this.text(g, this.coop || this.guestJourney ? '[Q] Main menu' : '[S] Save now      [X] Export save file      [L] Import save file      [Q] Main menu', sw / 2, sh / 2 + 84,
-                rgb(255, 215, 140), true);
-            g.font = SMALL_FONT;
-            const resetHint = this.coop && !this.coop.host ? 'Only the co-op host can reset the map' : this.resetMapConfirmT > 0 ? 'Press M again to reset the map (keeps gear, skills & EXP)' : '[M] Reset Map';
-            this.text(g, resetHint, sw / 2, sh / 2 + 108, this.resetMapConfirmT > 0 ? rgb(255, 150, 120) : rgb(190, 180, 165), true);
-            if (this.coop && this.coop.host) {
-                const s = this.coopSettings;
-                this.text(g, '[O] Friendly fire: ' + (s.friendlyFire ? 'ON' : 'OFF')
-                    + '    [[ / ]] Enemy strength: ' + s.enemyScale + '%', sw / 2, sh / 2 + 138, rgb(190, 180, 165), true);
-                this.text(g, '[; / \'] Enemy numbers: ' + s.countScale + '% per extra player', sw / 2, sh / 2 + 162, rgb(190, 180, 165), true);
-            }
-            this.text(g, 'Progress autosaves in this browser. Export a save file to back it up or move it to another browser / computer.',
-                sw / 2, sh / 2 + 128, rgb(190, 180, 165), true);
-        }
+        if (this.paused && !this.showHelp) this.drawPauseMenu(g, sw, sh);
         if (this.saveNoteT > 0 && this.saveNote !== null) {
             g.font = HUD_FONT;
             const a = U.clamp(this.saveNoteT * 2, 0, 1);
             this.text(g, this.saveNote, sw / 2, 112, U.alpha(this.saveNoteOk ? rgb(200, 235, 190) : rgb(255, 110, 90), a), true);
         }
         if (this.showHelp) this.drawHelp(g, sw, sh);
+    }
+
+    pauseButton(g, action, title, copy, x, y, w, h, opts) {
+        const o = opts || {}, disabled = !!o.disabled;
+        this.pauseRects.push({ action, x, y, w, h, disabled });
+        roundRectPath(g, x, y, w, h, 6);
+        g.fillStyle = disabled ? 'rgba(30,25,23,0.72)' : o.primary ? 'rgb(91,38,31)' : o.danger ? 'rgb(54,27,25)' : 'rgb(46,36,32)';
+        g.fill();
+        setStroke(g, 1, false);
+        g.strokeStyle = disabled ? 'rgb(57,49,44)' : o.primary ? 'rgb(164,79,59)' : o.danger ? 'rgb(112,54,47)' : 'rgb(84,66,54)';
+        g.stroke();
+        g.font = 'bold 16px serif';
+        this.text(g, title, x + 14, y + 22, disabled ? rgb(113,103,94) : rgb(244,233,216), false);
+        g.font = '12px sans-serif';
+        this.text(g, copy, x + 14, y + 41, disabled ? rgb(90,83,78) : rgb(177,161,145), false);
+        if (o.key) {
+            g.font = 'bold 12px monospace';
+            this.text(g, o.key, x + w - 14, y + 22, disabled ? rgb(90,83,78) : rgb(214,183,133), true);
+        }
+    }
+
+    drawPauseMenu(g, sw, sh) {
+        this.pauseRects = [];
+        g.fillStyle = 'rgba(5,4,4,0.82)';
+        g.fillRect(0, 0, sw, sh);
+        const W = Math.min(940, sw - 28), H = Math.min(650, sh - 28);
+        const X = Math.floor((sw - W) / 2), Y = Math.floor((sh - H) / 2);
+        const grad = g.createLinearGradient(X, Y, X + W, Y + H);
+        grad.addColorStop(0, 'rgba(30,23,20,0.98)');
+        grad.addColorStop(1, 'rgba(15,13,12,0.98)');
+        roundRectPath(g, X, Y, W, H, 10);
+        g.fillStyle = grad;
+        g.fill();
+        setStroke(g, 1, false);
+        g.strokeStyle = 'rgb(84,64,50)';
+        g.stroke();
+
+        g.fillStyle = 'rgb(184,73,54)';
+        g.fillRect(X + 28, Y + 24, 48, 3);
+        g.fillStyle = 'rgb(112,84,58)';
+        g.fillRect(X + 82, Y + 24, 28, 3);
+        g.font = 'bold 34px serif';
+        this.text(g, "RONIN'S PATH", X + 28, Y + 68, rgb(226,211,188), false);
+        g.font = 'bold 18px ' + KANJI_FAMILY;
+        this.text(g, '\u4e00\u6642\u505c\u6b62', X + 28, Y + 94, rgb(168,139,101), false);
+        g.font = 'bold 13px sans-serif';
+        this.text(g, 'JOURNEY PAUSED', X + W - 28, Y + 54, rgb(213,91,70), true);
+        g.font = '12px sans-serif';
+        this.text(g, 'Esc resumes the game', X + W - 28, Y + 76, rgb(157,143,130), true);
+
+        const pad = 28, gap = 18, top = Y + 116;
+        const colW = (W - pad * 2 - gap) / 2;
+        const lx = X + pad, rx = lx + colW + gap;
+        const section = (title, copy, x, y) => {
+            g.font = 'bold 15px serif';
+            this.text(g, title.toUpperCase(), x, y, rgb(214,185,135), false);
+            g.font = '12px sans-serif';
+            this.text(g, copy, x, y + 19, rgb(146,133,121), false);
+        };
+        section('Return to the path', 'Continue playing or prepare your ronin.', lx, top);
+        section('Journey data', this.guestJourney ? 'Journey saves are managed by the host.' : 'Manage progress stored in this browser.', rx, top);
+        let y = top + 32;
+        this.pauseButton(g, 'resume', 'Resume Journey', 'Return to the world.', lx, y, colW, 52, { primary: true, key: 'ESC' });
+        this.pauseButton(g, 'save', 'Save Now', this.guestJourney ? 'Unavailable to co-op guests.' : 'Write your current progress to this browser.',
+            rx, y, colW, 52, { key: 'S', disabled: this.guestJourney });
+        y += 60;
+        this.pauseButton(g, 'equipment', 'Equipment & Skills', 'Change gear, appearance, combat arts, and skills.', lx, y, colW, 52, { key: 'TAB' });
+        this.pauseButton(g, 'export', 'Export Save File', this.guestJourney ? 'Unavailable to co-op guests.' : 'Create a portable backup of your journey.',
+            rx, y, colW, 52, { key: 'X', disabled: this.guestJourney });
+        y += 60;
+        this.pauseButton(g, 'controls', 'Controls & Guide', 'Review combat, exploration, and keyboard controls.', lx, y, colW, 52, { key: 'H' });
+        this.pauseButton(g, 'import', 'Import Save File', this.guestJourney ? 'Unavailable to co-op guests.' : 'Restore a previously exported journey.',
+            rx, y, colW, 52, { key: 'L', disabled: this.guestJourney });
+
+        y += 82;
+        section(this.coop && this.coop.host ? 'Co-op rules' : 'World options',
+            this.coop && !this.coop.host ? 'Only the host can alter this shared world.' : 'Changes here affect the current journey.', lx, y);
+        y += 32;
+        const resetDisabled = this.coop && !this.coop.host;
+        const resetTitle = this.resetMapConfirmT > 0 ? 'Confirm Reset Map' : 'Reset Map';
+        const resetCopy = resetDisabled ? 'Only the co-op host can reset the map.'
+            : this.resetMapConfirmT > 0 ? 'Select again to rebuild the world; gear and progress remain.' : 'Rebuild the world while keeping gear, skills, and EXP.';
+        this.pauseButton(g, 'reset', resetTitle, resetCopy, lx, y, colW, 52,
+            { danger: true, key: 'M', disabled: resetDisabled });
+        this.pauseButton(g, 'main-menu', 'Return to Main Menu', 'Save progress and leave the current journey.', rx, y, colW, 52, { danger: true, key: 'Q' });
+
+        if (this.coop && this.coop.host) {
+            y += 60;
+            const s = this.coopSettings, smallGap = 9, smallW = (W - pad * 2 - smallGap * 4) / 5;
+            this.pauseButton(g, 'friendly-fire', 'Friendly Fire', s.friendlyFire ? 'Enabled' : 'Disabled', lx, y, smallW, 50, { key: 'O' });
+            this.pauseButton(g, 'enemy-down', 'Strength -5%', 'Now ' + s.enemyScale + '%', lx + (smallW + smallGap), y, smallW, 50, { key: '[' });
+            this.pauseButton(g, 'enemy-up', 'Strength +5%', 'Now ' + s.enemyScale + '%', lx + (smallW + smallGap) * 2, y, smallW, 50, { key: ']' });
+            this.pauseButton(g, 'count-down', 'Numbers -5%', 'Now ' + s.countScale + '%', lx + (smallW + smallGap) * 3, y, smallW, 50, { key: ';' });
+            this.pauseButton(g, 'count-up', 'Numbers +5%', 'Now ' + s.countScale + '%', lx + (smallW + smallGap) * 4, y, smallW, 50, { key: "'" });
+        }
+
+        g.font = '11px sans-serif';
+        this.text(g, 'Progress autosaves in this browser. Exporting creates a portable backup.', X + pad, Y + H - 18, rgb(124,113,103), false);
     }
 
     drawBoss(g, sw) {
