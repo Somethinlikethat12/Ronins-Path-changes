@@ -21,10 +21,10 @@ const REST_HUNT_R = 900;
 function clashParams(ngPlus) {
     const ng = U.clamp(ngPlus | 0, 0, NG_PLUS_MAX);
     return {
-        step: Math.max(0.052, 0.08 - 0.004 * ng),
+        step: Math.max(0.06, 0.09 - 0.004 * ng),
         penalty: 0.06 + 0.015 * ng,
-        enemyPush: 0.14 + 0.008 * ng,
-        radius: Math.max(16, 36 - 2.5 * ng),
+        enemyPush: 0.13 + 0.008 * ng,
+        radius: Math.max(16, 38 - 2.5 * ng),
         targets: 3 + (ng >= 3 ? 1 : 0) + (ng >= 6 ? 1 : 0),
     };
 }

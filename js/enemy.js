@@ -12,6 +12,7 @@ const NORMAL_ENEMY_HP_SCALE = 1.5;
 const NORMAL_ENEMY_POSTURE_SCALE = 1.35;
 const NORMAL_ENEMY_DAMAGE_SCALE = 1.1;
 const NORMAL_ENEMY_SPEED_SCALE = 1.1;
+const ENEMY_PARRY_SPAM_THRESHOLD = 2.5;
 const EA = {
     R_A: new Attack('slash', .45, .12, .45, 70, 140, 14, 18, 240),
     R_B: new Attack('slash2', .30, .12, .50, 70, 140, 14, 18, 240),
@@ -303,6 +304,18 @@ class Enemy extends Actor {
         if (this.target) {
             const p = this.target;
             const signature = this.boss ? EA.DAIMYO_ASHFALL : ELITE_SUPERS[this.eliteStyle];
+            if (this.isParrySpamming(p)) {
+                const punishments = this.combos.filter(c => c.some(a => a.perilous));
+                if (punishments.length) {
+                    let choice = punishments[this.rnd.nextInt(punishments.length)];
+                    if (punishments.length > 1 && choice === this.lastCombo) {
+                        choice = punishments[(punishments.indexOf(choice) + 1
+                            + this.rnd.nextInt(punishments.length - 1)) % punishments.length];
+                    }
+                    this.lastCombo = choice;
+                    return choice;
+                }
+            }
             if (p.st === 'HEAL' || p.st === 'STAGGER') {
                 const minWindup = Math.min(...this.combos.filter(c => c.length > 1).map(c => c[0].windup));
                 const quick = this.combos.filter(c => c.length > 1 && c[0].windup <= minWindup + 0.06);
@@ -328,6 +341,10 @@ class Enemy extends Actor {
         }
         this.lastCombo = choice;
         return choice;
+    }
+
+    isParrySpamming(p) {
+        return p !== null && p !== undefined && Number.isFinite(p.spam) && p.spam >= ENEMY_PARRY_SPAM_THRESHOLD;
     }
 
     pickGap() {
@@ -526,7 +543,7 @@ class Enemy extends Actor {
                 this.startCombo(this.pickCombo(), 1);
                 return;
             }
-            if (this.gap.length > 0 && d > this.reach + p.r + 30 && d < 280
+            if (!this.isParrySpamming(p) && this.gap.length > 0 && d > this.reach + p.r + 30 && d < 280
                 && (p.st === 'HEAL' || p.st === 'STAGGER' || this.rnd.nextDouble() < dt * (this.vet ? 3.2 : 1.8))) {
                 this.startCombo(this.pickGap(), 1);
                 return;
@@ -582,7 +599,7 @@ class Enemy extends Actor {
         this.hasToken = true;
         this.tokenT = 0;
         if (d < this.reach + p.r + 10) this.startCombo(this.pickCombo(), 0.7);
-        else if (this.gap.length > 0) this.startCombo(this.pickGap(), 0.8);
+        else if (!this.isParrySpamming(p) && this.gap.length > 0) this.startCombo(this.pickGap(), 0.8);
     }
 
     startCombo(c, windupMul) {

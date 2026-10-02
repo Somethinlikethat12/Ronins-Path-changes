@@ -160,6 +160,14 @@ ordinary.target = { st: 'HEAL', guarding: true };
 assert.equal(ordinary.pickCombo()[0].windup,
     Math.min(...ordinary.combos.filter(c => c.length > 1).map(c => c[0].windup)));
 assert(ordinary.pickGap().length > 1);
+for (const type of ['RONIN', 'SPEAR', 'BRUTE']) {
+    const foe = new Enemy(game, type, 4000, 4000, false, null, 7);
+    foe.target = { st: 'FREE', guarding: false, spam: 3 };
+    assert(foe.isParrySpamming(foe.target));
+    assert(foe.pickCombo().some(atk => atk.perilous), type + ' should punish parry spam with an unparryable attack');
+    foe.target.spam = 2.49;
+    assert(!foe.isParrySpamming(foe.target));
+}
 
 function spawnFixture() {
     const world = { camps: [
@@ -298,7 +306,8 @@ const ng0 = clashParams(0), ng7 = clashParams(7);
 assert(ng7.step < ng0.step && ng7.penalty > ng0.penalty && ng7.targets > ng0.targets);
 assert(ng0.enemyPush > 0 && ng7.enemyPush > ng0.enemyPush);
 assert(ng7.radius < ng0.radius && ng0.targets > 1);
-assert(ng0.step < 0.095 && ng7.step < 0.06);
+assert(ng0.step < 0.095 && ng7.step < 0.07);
+assert(ng0.step > 0.08 && ng0.enemyPush < 0.14 && ng0.radius > 36);
 assert(ng0.radius >= 16 && ng7.radius >= 16);
 const clashPlayerForQte = { x: 0, y: 0, st: 'CLASH' };
 const clashEnemyForQte = { x: 100, y: 0, st: 'CLASH' };
