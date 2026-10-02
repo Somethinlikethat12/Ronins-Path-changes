@@ -6,23 +6,26 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const context = vm.createContext({ console });
-for (const name of ['util', 'skills', 'settings', 'world', 'enemy', 'game', 'save']) {
+for (const name of ['util', 'skills', 'settings', 'world', 'loadout', 'enemy', 'game', 'save']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name + '.js'), 'utf8'), context);
 }
-const { Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_HP_SCALE, NORMAL_ENEMY_POSTURE_SCALE } = vm.runInContext(
-    '({ Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_HP_SCALE, NORMAL_ENEMY_POSTURE_SCALE })', context);
+const { Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_HP_SCALE, NORMAL_ENEMY_POSTURE_SCALE,
+    NORMAL_ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_SPEED_SCALE } = vm.runInContext(
+    '({ Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_HP_SCALE, NORMAL_ENEMY_POSTURE_SCALE, '
+        + 'NORMAL_ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_SPEED_SCALE })', context);
 
 const game = { difficulty: difficultyFor(null, 1, 0) };
 const types = [
-    ['RONIN', 82, 82, 'backhand'],
-    ['SPEAR', 72, 72, 'hook'],
-    ['BRUTE', 235, 176, 'uppercut'],
+    ['RONIN', 82, 82, 150, 'backhand'],
+    ['SPEAR', 72, 72, 140, 'hook'],
+    ['BRUTE', 235, 176, 105, 'uppercut'],
 ];
-for (const [type, hp, posture, move] of types) {
+for (const [type, hp, posture, speed, move] of types) {
     const enemy = new Enemy(game, type, 100, 100, false, null, 7);
     assert.equal(enemy.maxHp, hp * NORMAL_ENEMY_HP_SCALE);
     assert.equal(enemy.maxPosture, posture * NORMAL_ENEMY_POSTURE_SCALE);
-    assert.equal(enemy.dmgScale, ENEMY_DAMAGE_SCALE);
+    assert.equal(enemy.speed, speed * NORMAL_ENEMY_SPEED_SCALE);
+    assert.equal(enemy.dmgScale, ENEMY_DAMAGE_SCALE * NORMAL_ENEMY_DAMAGE_SCALE);
     assert(enemy.combos.some(combo => combo.some(atk => atk.name === move)));
     assert(enemy.combos.every(combo => combo.every(atk => atk && atk.windup > 0 && atk.recovery > 0)));
     const vet = new Enemy(game, type, 100, 100, false, null, 7, true);
@@ -42,13 +45,13 @@ const scaled = { difficulty: difficultyFor({ enemyScale: 25 }, 2, 2) };
 const scaledEnemy = new Enemy(scaled, 'SPEAR', 100, 100, false, null, 7);
 assert.equal(scaledEnemy.maxHp, 72 * NORMAL_ENEMY_HP_SCALE * scaled.difficulty.enemyHp);
 assert.equal(scaledEnemy.maxPosture, 72 * NORMAL_ENEMY_POSTURE_SCALE * scaled.difficulty.enemyPosture);
-assert.equal(scaledEnemy.dmgScale, ENEMY_DAMAGE_SCALE * scaled.difficulty.enemyDmg);
+assert.equal(scaledEnemy.dmgScale, ENEMY_DAMAGE_SCALE * NORMAL_ENEMY_DAMAGE_SCALE * scaled.difficulty.enemyDmg);
 
 const live = { coop: { settings: {} }, coopSettings: { enemyScale: 25, countScale: 25 },
     difficulty: difficultyFor({ enemyScale: 25, countScale: 25 }, 2, 0), partySize: 2, ngPlus: 0,
     enemies: [new Enemy({ difficulty: difficultyFor({ enemyScale: 25 }, 2, 0) }, 'RONIN', 100, 100, false, null, 7)] };
 Game.prototype.applyCoopSettings.call(live, { enemyScale: 50, countScale: 25 });
-assert.equal(live.enemies[0].dmgScale, ENEMY_DAMAGE_SCALE * live.difficulty.enemyDmg);
+assert.equal(live.enemies[0].dmgScale, ENEMY_DAMAGE_SCALE * NORMAL_ENEMY_DAMAGE_SCALE * live.difficulty.enemyDmg);
 assert(Math.abs(live.enemies[0].maxHp - 82 * NORMAL_ENEMY_HP_SCALE * live.difficulty.enemyHp) < 1e-9);
 
 const rolePlayer = {
@@ -106,6 +109,38 @@ assert(daimyo.combos.some(combo => combo.some(atk => atk.name === EA.DAIMYO_ASHF
 assert(daimyo.gap.some(combo => combo.some(atk => atk.name === EA.DAIMYO_ASHFALL.name)));
 assert(EA.DAIMYO_ASHFALL.perilous && !EA.DAIMYO_ASHFALL.thrust);
 assert(daimyo.dodgeChance > 0);
+const respawnElite = new Enemy(game, 'RONIN', 4000, 4000, true, eliteNames[0][0], 8);
+const respawnBoss = new Enemy(game, 'RONIN', 4000, 4000, true, 'The Ashen Daimyo', 9, true, true);
+const defeatedElite = new Enemy(game, 'SPEAR', 5000, 5000, true, eliteNames[1][0], 10);
+respawnElite.hp = 1;
+respawnElite.lives = 1;
+respawnElite.posture = 20;
+respawnBoss.hp = 1;
+respawnBoss.lives = 1;
+respawnBoss.posture = 20;
+respawnBoss.aware = true;
+defeatedElite.st = 'DEAD';
+const respawnGame = { player: { respawn() {} }, lastShrine: { x: 0, y: 0 }, enemies: [respawnElite, respawnBoss, defeatedElite],
+    coop: null, boss: respawnBoss, banner() {}, saveSoon() {} };
+Game.prototype.respawn.call(respawnGame);
+assert.equal(respawnElite.hp, respawnElite.maxHp);
+assert.equal(respawnElite.lives, 2);
+assert.equal(respawnElite.posture, 0);
+assert.equal(respawnBoss.hp, respawnBoss.maxHp);
+assert.equal(respawnBoss.lives, 3);
+assert.equal(respawnBoss.posture, 0);
+assert.equal(defeatedElite.st, 'DEAD');
+assert.equal(respawnGame.boss, null);
+
+const mapBoss = new Enemy(game, 'RONIN', 5000, 6000, true, 'The Ashen Daimyo', 11, true, true);
+const mapFillStyles = [];
+const mapContext = {
+    fillRect() {}, drawImage() {}, beginPath() {}, moveTo() {}, lineTo() {}, closePath() {},
+    fill() { mapFillStyles.push(this.fillStyle); }, stroke() {}, strokeRect() {},
+};
+Game.prototype.drawMinimap.call({ world: { minimap: {}, camps: [], shrines: [] }, player: { x: 3000, y: 3000, facing: 0 },
+    enemies: [mapBoss], lastShrine: null, coop: null, camX: 3000, camY: 3000 }, mapContext, 800, 600);
+assert(mapFillStyles.includes('rgb(255,80,60)'));
 const ordinary = new Enemy(game, 'RONIN', 4000, 4000, false, null, 7);
 for (const foe of [daimyo, ...eliteNames.map(([name, type]) => new Enemy(game, type, 4000, 4000, true, name, 7))]) {
     foe.rnd.nextDouble = () => 0;
@@ -256,5 +291,70 @@ assert.equal(spammer.recoilCalls, 1);
 assert.equal(parrier.st, 'WINDUP');
 assert.equal(parrier.hasToken, true);
 assert.equal(parrier.attackRead, 0);
+
+// sword clash: elites lock blades with a solo player mid-swing; NG+ needs more clicks and has more targets
+const clashParams = vm.runInContext('clashParams', context);
+const ng0 = clashParams(0), ng7 = clashParams(7);
+assert(ng7.step < ng0.step && ng7.penalty > ng0.penalty && ng7.targets > ng0.targets);
+assert(ng0.enemyPush > 0 && ng7.enemyPush > ng0.enemyPush);
+assert(ng7.radius < ng0.radius && ng0.targets > 1);
+assert(ng0.step < 0.095 && ng7.step < 0.06);
+assert(ng0.radius >= 16 && ng7.radius >= 16);
+const clashPlayerForQte = { x: 0, y: 0, st: 'CLASH' };
+const clashEnemyForQte = { x: 100, y: 0, st: 'CLASH' };
+let qteMouseHit = false, qteMouseX = 100, qteMouseY = 400;
+const qteTargets = [{ x: 100, y: 400, r: ng0.radius }, { x: 300, y: 400, r: ng0.radius }, { x: 500, y: 400, r: ng0.radius }];
+const qteGame = Object.assign(Object.create(Game.prototype), {
+    clash: { e: clashEnemyForQte, params: ng0, progress: 0.5, targets: qteTargets, flash: 0, wrongT: 0, ang: 0 },
+    player: clashPlayerForQte,
+    input: { mouseHit: () => qteMouseHit, mx: qteMouseX, my: qteMouseY },
+    canvas: { width: 1000, height: 800 },
+    fx: { sparks() {}, update() {} },
+    sfx: { play() {} },
+    shake() {},
+    shakeAmt: 0,
+    zoomKickV: 0,
+    flashA: 0,
+});
+qteGame.tickClash(0.5);
+assert.equal(qteGame.clash.targets.length, ng0.targets);
+assert.equal(qteGame.clash.progress, 0.5 - 0.5 * ng0.enemyPush);
+const progressAfterPush = qteGame.clash.progress;
+qteMouseHit = true;
+qteGame.input.mx = qteMouseX;
+qteGame.input.my = qteMouseY;
+qteGame.tickClash(1 / 60);
+assert.equal(qteGame.clash.targets.length, ng0.targets);
+assert.equal(qteGame.clash.progress, progressAfterPush - ng0.enemyPush / 60 + ng0.step);
+qteMouseHit = false;
+const progressAfterHit = qteGame.clash.progress;
+qteGame.tickClash(0.5);
+assert.equal(qteGame.clash.progress, progressAfterHit - 0.5 * ng0.enemyPush);
+assert.equal(qteGame.clash.targets.length, ng0.targets);
+const clashPlayer = Object.assign({}, attacker, { st: 'ATTACK', facing: 0 });
+const clashGame = Object.assign(Object.create(combatGame), { player: clashPlayer, coop: null, clash: null,
+    clashes: 0, startClash(e) { this.clashes++; this.clash = { e }; e.setSt('CLASH'); } });
+const duelist = new Enemy(clashGame, 'RONIN', 100, 100, true, null, 9);
+duelist.aware = true;
+duelist.clashCd = 0;
+duelist.facing = Math.PI;
+duelist.rnd.nextDouble = () => 0;
+duelist.startCombo([EA.R_BACKHAND], 1);
+duelist.setSt('ACTIVE');
+const hpBefore = duelist.hp;
+duelist.takeHit(clashPlayer, parryStrike);
+assert.equal(clashGame.clashes, 1);
+assert.equal(duelist.st, 'CLASH');
+assert.equal(duelist.hp, hpBefore);
+assert(duelist.clashCd > 0);
+const grunt = new Enemy(clashGame, 'RONIN', 100, 100, false, null, 9);
+grunt.aware = true;
+grunt.facing = Math.PI;
+grunt.clashCd = 0;
+grunt.startCombo([EA.R_BACKHAND], 1);
+grunt.setSt('ACTIVE');
+clashGame.clash = null;
+grunt.takeHit(clashPlayer, parryStrike);
+assert.equal(clashGame.clashes, 1);
 
 console.log('Enemy variation and scaling checks passed');

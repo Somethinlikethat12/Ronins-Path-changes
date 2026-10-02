@@ -17,4 +17,4 @@ Online play has two paths. `js/net.js` wraps PeerJS connections and message disp
 
 ## Build, test, and lint
 
-There is no package manifest or configured build, test, or lint command in this repository. The game is run directly from `index.html` in a browser; save persistence is implemented with browser `localStorage`. No automated test suite or single-test command is configured.
+There is no package manifest, build step, or lint command in this repository. The game is run directly from `index.html` in a browser; save persistence is implemented with browser `localStorage`. Run the automated checks from the repository root with `node tests/enemies.test.js` and `node tests/weapons.test.js`; each loads the JavaScript files it covers into a `node:vm` context and prints a checks-passed line. Syntax-check a file with `node --check js/<file>.js`. Test fixtures are partial `Game` stand-ins, so guard new `Game` hooks called from `Enemy` or `Player` code (for example, `typeof g.startClash === 'function'`).

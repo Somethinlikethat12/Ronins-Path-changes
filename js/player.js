@@ -83,6 +83,7 @@ class Player extends Actor {
         this.comboGrace = 0;
         this.poise = 0;
         this.poiseLeft = 0;
+        this.lastDmgTaken = 0;
         // guard / deflect
         this.guarding = false;
         this.guardStart = -99;
@@ -186,7 +187,7 @@ class Player extends Actor {
     invulnerable() {
         const st = this.st;
         const art = this.curArt;
-        return this.invuln > 0 || st === 'DEATHBLOW' || st === 'MIKIRI' || st === 'IAI' || (st === 'DODGE' && this.stT < this.dodgeIframes)
+        return this.invuln > 0 || st === 'DEATHBLOW' || st === 'MIKIRI' || st === 'IAI' || st === 'CLASH' || (st === 'DODGE' && this.stT < this.dodgeIframes)
             || (st === 'ART' && art.iframes !== undefined && this.stT >= art.iframes[0] && this.stT < art.iframes[1]);
     }
 
@@ -539,9 +540,25 @@ class Player extends Actor {
         this.artAtk = null;
         this.guarding = false;
         this.facing = aimAng;
+        this.poiseLeft = this.artPoise(a);
         g.fx.text(a.name, this.x, this.y - 50, a.color, 17);
         g.fx.ring(this.x, this.y, 8, 60, 0.3, 3, a.color);
         g.sfx.play('DODGE');
+    }
+
+    /** Hammers carry their weight through combat arts; the hammer's own art is near-unstoppable. */
+    artPoise(a) {
+        if (weaponType(this.sword) !== 'hammer') return 0;
+        return this.poise * (a.weapon === 'hammer' ? 5 : 2.5);
+    }
+
+    /** True while a hammer art can still shrug off blows (until its last strike finishes). */
+    artArmored(perilous) {
+        const a = this.curArt;
+        if (this.st !== 'ART' || !a || this.poiseLeft <= 0) return false;
+        if (perilous && a.weapon !== 'hammer') return false;
+        const last = a.hits[a.hits.length - 1];
+        return this.stT <= last.t + 0.1;
     }
 
     gainArtCharge() {
@@ -780,13 +797,17 @@ class Player extends Actor {
             }
             return P_BLOCK;
         }
+        const artArmor = this.artArmored(perilous);
+        if (artArmor && this.curArt.weapon === 'hammer') dmg *= 0.7;
+        this.lastDmgTaken = dmg;
         this.hp -= dmg;
-        this.posture = Math.min(this.maxPosture, this.posture + post * 0.35);
+        this.posture = Math.min(this.maxPosture, this.posture + post * (artArmor ? 0.2 : 0.35));
         this.postureCd = 1.0;
         this.hurtFlash = 0.3;
         this.deflectStreak = 0;
         // poise: a heavy weapon mid-windup or mid-swing takes the blow and keeps going (perilous attacks still interrupt)
-        if (!perilous && this.st === 'ATTACK' && this.phase <= 1 && this.poiseLeft > 0 && dmg <= this.poiseLeft) {
+        const swingPoise = !perilous && this.st === 'ATTACK' && this.phase <= 1;
+        if ((swingPoise || artArmor) && this.poiseLeft > 0 && dmg <= this.poiseLeft) {
             this.poiseLeft -= dmg;
             this.invuln = 0.2;
             this.move(g.world, -Math.cos(ang) * 4, -Math.sin(ang) * 4);
@@ -990,6 +1011,9 @@ class Player extends Actor {
         } else if (st === 'DEATHBLOW') {
             handRel = 0;
             blade = facing + (this.stT < 0.13 ? 1.4 : -0.6);
+        } else if (st === 'CLASH') {
+            handRel = 0.1;
+            blade = facing + 0.35;
         } else if (st === 'STAGGER') {
             blade = facing + 1.6;
         } else if (st === 'THROW') {

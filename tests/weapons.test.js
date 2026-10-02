@@ -24,6 +24,18 @@ const { lo, g, p, shrine, fxEvents } = vm.runInContext(`(() => {
 assert.equal(p.throws, 5);
 assert.equal(vm.runInContext('PLAYER_DAMAGE_SCALE', context), 0.94);
 assert.equal(vm.runInContext('computeStats', context)(lo, 100, 3, new Set()).dmg, 0.94);
+const progression = vm.runInContext('playerProgression', context);
+assert.equal(progression(0, false).baseMaxHp, 100);
+assert.equal(progression(0, false).baseGourds, 3);
+assert.equal(progression(2, false).baseMaxHp, 140);
+assert.equal(progression(2, false).baseGourds, 4);
+assert.equal(progression(3, false).baseMaxHp, 150);
+assert.equal(progression(3, false).baseGourds, 5);
+assert.equal(progression(20, true).baseMaxHp, 180);
+assert.equal(progression(20, true).baseGourds, 5);
+const cappedStats = vm.runInContext('computeStats', context)(lo, 500, 20, new Set());
+assert.equal(cappedStats.maxHp, 180);
+assert.equal(cappedStats.gourds, 5);
 assert.equal(p.comboAtk[0].damage, vm.runInContext('P_COMBO[0].damage', context) * 0.94);
 assert.equal(p.throwAtk.damage, lo.throwableDef().damage * 0.94);
 for (const [id, arc, finisherArc] of [['spear', 42, 54], ['hammer', 150, 185], ['axe', 180, 240]]) {
@@ -110,6 +122,29 @@ p.invuln = 0;
 p.receive(50, 0, 14, 10, false);
 assert.equal(p.st, 'STAGGER');
 p.toFree();
+// hammer combat arts: the hammer shrugs off blows mid-art; Earthshaker even withstands perilous strikes
+const hitDuringArt = (sword, art, dmg, perilous) => {
+    lo.sword = sword;
+    lo.art = art;
+    p.applyLoadout();
+    p.hp = p.maxHp;
+    p.invuln = 0;
+    p.artCharges = p.maxArtCharges = 10;
+    p.tryArt(0);
+    assert.equal(p.st, 'ART');
+    const hp = p.hp;
+    assert.equal(p.receive(50, 0, dmg, 10, perilous), P_HIT_RESULT);
+    const st = p.st, taken = hp - p.hp;
+    p.toFree();
+    return [st, taken];
+};
+assert.equal(hitDuringArt('hammer', 'earthshaker', 30, true)[0], 'ART');
+assert.equal(hitDuringArt('hammer', 'earthshaker', 60, false)[0], 'ART');
+assert(hitDuringArt('hammer', 'earthshaker', 30, false)[1] < hitDuringArt('hammer', 'whirlwind', 30, false)[1]);
+assert.equal(hitDuringArt('hammer', 'whirlwind', 30, false)[0], 'ART');
+assert.equal(hitDuringArt('hammer', 'whirlwind', 30, true)[0], 'STAGGER');
+assert.equal(hitDuringArt('wanderer', 'whirlwind', 14, false)[0], 'STAGGER');
+lo.art = 'whirlwind';
 const statsFor = id => { lo.sword = id; return vm.runInContext('computeStats', context)(lo, 100, 3, new Set()).poise; };
 assert(statsFor('stone-hammer') > statsFor('war-hammer') && statsFor('war-hammer') > statsFor('hammer'));
 assert(statsFor('hammer') > statsFor('axe') && statsFor('axe') > statsFor('odachi') && statsFor('odachi') > statsFor('wanderer'));

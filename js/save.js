@@ -115,8 +115,7 @@ const SaveGame = {
         }
         game.skillPoints = game.pointsEarned - spent;
         // elite rewards are derived from progress rather than trusted from the file
-        p.baseMaxHp = 100 + 20 * game.elitesSlain;
-        p.baseGourds = 3 + game.elitesSlain;
+        Object.assign(p, playerProgression(game.elitesSlain, game.bossDefeated));
         p.applyLoadout();
         const s = d.player;
         p.hp = num(s.hp, 1, p.maxHp, p.maxHp);

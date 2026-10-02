@@ -694,7 +694,7 @@ class Duel {
         if (res === P_DEFLECT) this.onDeflected(p, foe, atk);
         else if (res === P_HIT) {
             p.ki = Math.min(100, p.ki + 4);
-            this.fx.text(String(Math.trunc(atk.damage * foe.dmgTaken)), foe.x, foe.y - 30, WHITE, 13);
+            this.fx.text(String(Math.trunc(foe.lastDmgTaken)), foe.x, foe.y - 30, WHITE, 13);
             if (foe.st !== 'DEAD' && foe.posture >= foe.maxPosture) this.breakPosture(foe);
         }
     }

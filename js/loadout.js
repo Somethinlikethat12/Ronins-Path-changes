@@ -240,13 +240,25 @@ class Loadout {
 }
 
 const PLAYER_DAMAGE_SCALE = 0.94;
+const MAX_PLAYER_HP = 180;
+const MAX_PLAYER_GOURDS = 5;
+
+function playerProgression(elites, bossDefeated) {
+    const count = Number.isFinite(elites) ? Math.max(0, Math.trunc(elites)) : 0;
+    const eliteHp = Math.min(count, 2) * 20 + Math.max(0, count - 2) * 10;
+    const eliteGourds = Math.ceil(count / 2);
+    return {
+        baseMaxHp: Math.min(MAX_PLAYER_HP, 100 + eliteHp + (bossDefeated ? 40 : 0)),
+        baseGourds: Math.min(MAX_PLAYER_GOURDS, 3 + eliteGourds + (bossDefeated ? 1 : 0)),
+    };
+}
 
 function computeStats(lo, baseHp, baseGourds, skills) {
     const sw = lo.swordDef(), ar = lo.armorDef(), ch = lo.charmDef();
     const s = {
-        maxHp: baseHp,
+        maxHp: Math.min(baseHp, MAX_PLAYER_HP),
         maxPosture: 100 + ar.posture + (ch.posture || 0),
-        gourds: baseGourds + (ch.gourds || 0),
+        gourds: Math.min(MAX_PLAYER_GOURDS, baseGourds + (ch.gourds || 0)),
         charges: BASE_ART_CHARGES + (ch.charges || 0),
         dmg: sw.dmg * (ch.dmg || 1) * PLAYER_DAMAGE_SCALE,
         post: sw.post,

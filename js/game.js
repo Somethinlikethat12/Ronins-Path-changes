@@ -17,6 +17,18 @@ const BIG_KANJI = 'bold 150px ' + KANJI_FAMILY;
 const REST_SAFE_R = 480;
 const REST_HUNT_R = 900;
 
+/** Sword-clash tuning: NG+ requires more clicks, offers more targets, and shrinks them. */
+function clashParams(ngPlus) {
+    const ng = U.clamp(ngPlus | 0, 0, NG_PLUS_MAX);
+    return {
+        step: Math.max(0.052, 0.08 - 0.004 * ng),
+        penalty: 0.06 + 0.015 * ng,
+        enemyPush: 0.14 + 0.008 * ng,
+        radius: Math.max(16, 36 - 2.5 * ng),
+        targets: 3 + (ng >= 3 ? 1 : 0) + (ng >= 6 ? 1 : 0),
+    };
+}
+
 class Game {
     constructor(seed, canvas, save, opts) {
         const o = opts || {};
@@ -48,7 +60,7 @@ class Game {
         this.flashColor = WHITE;
         this.paused = false;
         this.pauseRects = [];
-        this.showHelp = true;
+        this.clash = null;
         this.kills = 0;
         this.elitesSlain = 0;
         this.totalElites = 0;
@@ -225,6 +237,171 @@ class Game {
         this.parryK = k;
     }
 
+    // ---------------- Sword clash (elite blade-lock QTE) ----------------
+
+    startClash(e, p) {
+        const ang = Math.atan2(e.y - p.y, e.x - p.x);
+        const params = clashParams(this.ngPlus);
+        this.clash = { e, params, progress: 0.5, t: 0, targets: [], flash: 0, wrongT: 0, ang };
+        while (this.clash.targets.length < params.targets) this.clash.targets.push(this.spawnClashTarget());
+        p.st = 'CLASH';
+        p.stT = 0;
+        p.guarding = false;
+        p.vx = p.vy = 0;
+        p.facing = ang;
+        e.releaseToken();
+        e.setSt('CLASH');
+        e.facing = ang + Math.PI;
+        e.kbx = e.kby = 0;
+        const mx = (p.x + e.x) / 2, my = (p.y + e.y) / 2;
+        this.fx.sparks(mx, my, ang + Math.PI / 2, TAU, 40, 620, rgb(255, 210, 120));
+        this.fx.ring(mx, my, 6, 90, 0.35, 4, rgb(255, 235, 180));
+        this.fx.text('CLASH!', mx, my - 60, rgb(255, 225, 140), 26);
+        this.sfx.play('CLANG');
+        this.shake(10);
+        this.zoomKick(0.07);
+        this.flash(rgb(255, 235, 180), 0.2);
+    }
+
+    /** A click target somewhere on screen, clear of the clash meter and of the other live targets. */
+    spawnClashTarget() {
+        const c = this.clash, r = c.params.radius, sw = this.canvas.width, sh = this.canvas.height;
+        const top = Math.min(sh * 0.24 + 70, sh - r * 3), m = r * 1.6 + 10;
+        let x = sw / 2, y = (top + sh) / 2;
+        for (let i = 0; i < 12; i++) {
+            x = m + Math.random() * Math.max(1, sw - m * 2);
+            y = Math.max(top, m) + Math.random() * Math.max(1, sh - m - Math.max(top, m));
+            if (c.targets.every(o => Math.hypot(o.x - x, o.y - y) > r * 3)) break;
+        }
+        return { x, y, r };
+    }
+
+    tickClash(dt) {
+        const c = this.clash, e = c.e, p = this.player, inp = this.input, P = c.params;
+        if (e.st !== 'CLASH' || p.st !== 'CLASH') {
+            this.clash = null;
+            if (p.st === 'CLASH') p.toFree();
+            if (e.st === 'CLASH') e.setSt('ENGAGE');
+            return;
+        }
+        c.flash -= dt;
+        c.wrongT -= dt;
+        this.shakeAmt *= Math.exp(-dt * 9);
+        this.zoomKickV *= Math.exp(-dt * 5);
+        this.flashA = Math.max(0, this.flashA - dt * 2.5);
+        let right = false, wrong = false;
+        if (inp.mouseHit(1)) {
+            const hitIdx = c.targets.findIndex(o => Math.hypot(inp.mx - o.x, inp.my - o.y) <= o.r * 1.15);
+            if (hitIdx >= 0) {
+                c.targets.splice(hitIdx, 1);
+                right = true;
+            } else wrong = true;
+        }
+        while (c.targets.length < P.targets) c.targets.push(this.spawnClashTarget());
+        c.progress -= P.enemyPush * dt;
+        const mx = (p.x + e.x) / 2, my = (p.y + e.y) / 2;
+        if (right) {
+            c.progress += P.step;
+            c.flash = 0.12;
+            this.fx.sparks(mx, my, c.ang + Math.PI / 2, TAU, 10, 420, rgb(255, 215, 120));
+            this.sfx.play('BLOCK');
+            this.shake(3);
+        } else if (wrong) {
+            c.progress -= P.penalty;
+            c.wrongT = 0.3;
+            this.fx.sparks(mx, my, c.ang + Math.PI, 1.2, 8, 300, rgb(200, 90, 255));
+            this.shake(4);
+        }
+        if (Math.random() < dt * 20) this.fx.sparks(mx, my, c.ang + Math.PI / 2, TAU, 2, 260, rgb(255, 200, 110));
+        this.fx.update(dt);
+        if (c.progress >= 1) this.endClash(true);
+        else if (c.progress <= 0) this.endClash(false);
+    }
+
+    endClash(won) {
+        const c = this.clash, e = c.e, p = this.player, ang = c.ang;
+        this.clash = null;
+        p.toFree();
+        e.lastDamageT = this.time;
+        e.showBars = 4;
+        if (won) {
+            this.fx.text('CLASH WON', p.x, p.y - 60, rgb(255, 225, 140), 22);
+            this.sfx.play('PARRY');
+            this.shake(12);
+            this.hitstop(0.12);
+            this.slowmo(0.3);
+            this.flash(rgb(255, 235, 180), 0.25);
+            this.parryBurst((p.x + e.x) / 2, (p.y + e.y) / 2, 5);
+            p.ki = Math.min(100, p.ki + 25);
+            if (p.gainArtCharge) p.gainArtCharge();
+            e.posture += e.maxPosture * 0.5;
+            e.kbx = Math.cos(ang) * 360;
+            e.kby = Math.sin(ang) * 360;
+            if (e.posture >= e.maxPosture) e.breakPosture();
+            else {
+                e.setSt('STUN');
+                e.stDur = 1.1;
+                e.attackCd = 1.2;
+                this.fx.text('OPENING', e.x, e.y - 40, rgb(255, 235, 170), 15);
+            }
+        } else {
+            this.fx.text('OVERPOWERED', p.x, p.y - 60, rgb(220, 110, 255), 20);
+            this.sfx.play('HEAVY');
+            e.setSt('ENGAGE');
+            e.attackCd = 0;
+            e.hasToken = true;
+            p.invuln = 0;
+            const ng = U.clamp(this.ngPlus | 0, 0, NG_PLUS_MAX);
+            const dmgScale = e.dmgScale || 1;
+            p.receive(e.x, e.y, (18 + 2 * ng) * dmgScale, (30 + 4 * ng) * dmgScale, true);
+            p.posture = Math.min(p.maxPosture - 1, p.posture + 20);
+        }
+    }
+
+    drawClash(g, sw, sh) {
+        const c = this.clash;
+        if (!c) return;
+        const cx = sw / 2, cy = sh * 0.24, W = Math.min(520, sw - 80), H = 18;
+        g.fillStyle = 'rgba(0,0,0,0.6)';
+        g.fillRect(cx - W / 2 - 16, cy - 74, W + 32, 170);
+        g.font = 'bold 30px serif';
+        this.text(g, 'CLASH!', cx, cy - 44, rgb(255, 225, 140), true);
+        g.font = SMALL_FONT;
+        this.text(g, 'Click fast to push back - the enemy is steadily gaining ground'
+            + (this.ngPlus > 0 ? '   (NG+' + this.ngPlus + ')' : ''), cx, cy - 22, rgb(220, 210, 195), true);
+        const x0 = cx - W / 2, split = x0 + W * U.clamp(c.progress, 0, 1);
+        g.fillStyle = 'rgb(255,200,90)';
+        g.fillRect(x0, cy - H / 2, split - x0, H);
+        g.fillStyle = 'rgb(150,50,210)';
+        g.fillRect(split, cy - H / 2, x0 + W - split, H);
+        setStroke(g, 2, false);
+        g.strokeStyle = '#000';
+        g.strokeRect(x0, cy - H / 2, W, H);
+        g.fillStyle = '#fff';
+        g.fillRect(split - 2, cy - H / 2 - 5, 4, H + 10);
+        g.fillStyle = 'rgba(255,255,255,0.5)';
+        g.fillRect(cx - 1, cy - H / 2 - 3, 2, H + 6);
+        if (c.wrongT > 0) {
+            setStroke(g, 3, false);
+            g.strokeStyle = 'rgba(255,90,90,' + U.clamp(c.wrongT * 3, 0, 1) + ')';
+            g.strokeRect(x0 - 3, cy - H / 2 - 3, W + 6, H + 6);
+        }
+        for (const o of c.targets) {
+            const r = o.r;
+            g.beginPath();
+            g.arc(o.x, o.y, r, 0, TAU);
+            g.fillStyle = 'rgba(255,200,90,0.85)';
+            g.fill();
+            setStroke(g, 3, false);
+            g.strokeStyle = '#fff';
+            g.stroke();
+            g.beginPath();
+            g.arc(o.x, o.y, r * 0.35, 0, TAU);
+            g.fillStyle = 'rgba(60,30,20,0.8)';
+            g.fill();
+        }
+    }
+
     gainExp(n, x, y) {
         this.exp += n;
         this.fx.text('+' + n + ' EXP', x, y - 20, rgb(140, 225, 205), 13);
@@ -281,8 +458,6 @@ class Game {
         } else if (action === 'equipment') {
             this.paused = false;
             this.menu.show();
-        } else if (action === 'controls') {
-            this.showHelp = true;
         } else if (action === 'save' && !this.guestJourney) {
             this.saveNow(true);
         } else if (action === 'export' && !this.guestJourney) {
@@ -293,6 +468,17 @@ class Game {
         } else if (action === 'main-menu') {
             this.saveNow(false);
             location.replace(location.href.split(/[?#]/)[0]);
+        } else if (action === 'new-game' && !this.guestJourney && !this.coop) {
+            if (this.newGameConfirmT > 0) {
+                SaveGame.clear();
+                this.hasSave = false;
+                // stop exit handlers from re-saving the old run during reload
+                this.saveNow = () => false;
+                location.replace(location.pathname);
+            } else {
+                this.newGameConfirmT = 3;
+                this.note('Select Start New Game again to ERASE your save', false);
+            }
         } else if (action === 'reset' && (!this.coop || this.coop.host)) {
             if (this.resetMapConfirmT > 0) {
                 this.resetMapConfirmT = 0;
@@ -317,26 +503,16 @@ class Game {
     tick(dt) {
         const inp = this.input, player = this.player, world = this.world, fx = this.fx;
         this.realTime += dt;
-        this.pauseFeedback.hidden = !(this.paused && !this.showHelp);
+        this.pauseFeedback.hidden = !this.paused;
         this.saveNoteT -= dt;
         this.newGameConfirmT -= dt;
         this.resetMapConfirmT -= dt;
-        if (this.showHelp && this.hasSave && inp.hit('KeyN')) {
-            if (this.newGameConfirmT > 0) {
-                SaveGame.clear();
-                this.hasSave = false;
-                // stop exit handlers from re-saving the old run during reload
-                this.saveNow = () => false;
-                location.replace(location.pathname);
-                return;
-            }
-            this.newGameConfirmT = 3;
-        }
-        if (inp.hit('KeyH') || (this.showHelp && (inp.hit('Enter') || inp.hit('NumpadEnter') || inp.mouseHit(1)))) {
-            this.showHelp = !this.showHelp;
+        if (this.clash && !this.paused && !this.menu.open) {
+            if (inp.hit('Escape')) this.paused = true;
+            else this.tickClash(dt);
             return;
         }
-        if (this.paused && !this.showHelp) {
+        if (this.paused) {
             if (inp.hit('Tab') || inp.hit('KeyI')) {
                 this.activatePauseAction('equipment');
                 return;
@@ -349,6 +525,7 @@ class Game {
                 return;
             }
             if (inp.hit('KeyM')) this.activatePauseAction('reset');
+            if (inp.hit('KeyN')) this.activatePauseAction('new-game');
             if (this.coop && this.coop.host) {
                 if (inp.hit('KeyO')) this.activatePauseAction('friendly-fire');
                 if (inp.hit('BracketLeft')) this.activatePauseAction('enemy-down');
@@ -368,12 +545,12 @@ class Game {
             this.menu.tick(inp, dt);
             return;
         }
-        if ((inp.hit('Tab') || inp.hit('KeyI')) && !this.paused && !this.showHelp && player.st !== 'DEAD') {
+        if ((inp.hit('Tab') || inp.hit('KeyI')) && !this.paused && player.st !== 'DEAD') {
             this.menu.show();
             return;
         }
         if (inp.hit('Escape')) this.paused = !this.paused;
-        if (this.showHelp || this.paused) return;
+        if (this.paused) return;
 
         const sw = this.canvas.width, sh = this.canvas.height;
         const z = this.zoom();
@@ -493,7 +670,7 @@ class Game {
     respawn() {
         const player = this.player;
         player.respawn(this.lastShrine.x, this.lastShrine.y + 60);
-        if (!this.coop) for (const e of this.enemies) if (e.aware) e.resetToHome();
+        if (!this.coop) for (const e of this.enemies) if (e.aware || e.elite) e.resetToHome();
         this.boss = null;
         this.camX = player.x;
         this.camY = player.y;
@@ -523,13 +700,17 @@ class Game {
             e.hp = Math.min(e.maxHp, e.hp * hpRatio);
             e.maxPosture *= postureRatio;
             e.posture = Math.min(e.maxPosture, e.posture * postureRatio);
-            e.dmgScale = ENEMY_DAMAGE_SCALE * this.difficulty.enemyDmg;
+            e.dmgScale = ENEMY_DAMAGE_SCALE * (e.elite ? 1 : NORMAL_ENEMY_DAMAGE_SCALE) * this.difficulty.enemyDmg;
         }
     }
 
     resetMap(seedOverride, ngOverride, remote) {
         const player = this.player, newSeed = Number.isFinite(seedOverride) ? seedOverride : Math.floor(Math.random() * 2 ** 48);
         const ascend = ngOverride === undefined && this.bossDefeated && this.ngPlus < NG_PLUS_MAX;
+        if (this.clash) {
+            this.clash = null;
+            if (player.st === 'CLASH') player.toFree();
+        }
         if (Number.isInteger(ngOverride)) this.ngPlus = U.clamp(ngOverride, 0, NG_PLUS_MAX);
         else if (ascend) this.ngPlus++;
         this.difficulty = difficultyFor(this.coopSettings, this.partySize, this.ngPlus);
@@ -824,8 +1005,7 @@ class Game {
         if (e.boss) {
             this.bossDefeated = true;
             this.boss = null;
-            player.baseMaxHp += 40;
-            player.baseGourds++;
+            Object.assign(player, playerProgression(this.elitesSlain, this.bossDefeated));
             player.applyLoadout();
             player.hp = player.maxHp;
             player.gourds = player.maxGourds;
@@ -833,9 +1013,8 @@ class Game {
             this.saveSoon();
         } else if (e.elite) {
             this.elitesSlain++;
+            Object.assign(player, playerProgression(this.elitesSlain, this.bossDefeated));
             this.saveSoon();
-            player.baseMaxHp += 20;
-            player.baseGourds++;
             player.applyLoadout();
             player.hp = player.maxHp;
             player.gourds = player.maxGourds;
@@ -1108,7 +1287,7 @@ class Game {
         g.font = SMALL_FONT;
         this.text(g, 'Elites slain ' + this.elitesSlain + '/' + this.totalElites + '     Camps cleared ' + cleared + '/' + world.camps.length
             + '     Kills ' + this.kills, 24, 58, rgb(220, 210, 190), false);
-        this.text(g, '[H] controls   [Tab] equipment & skills   [Esc] pause', 24, 78, rgb(180, 170, 150), false);
+        this.text(g, '[Tab] equipment & skills   [Esc] pause & controls', 24, 78, rgb(180, 170, 150), false);
         const need = expForNextPoint(this.pointsEarned);
         g.fillStyle = 'rgba(0,0,0,0.6)';
         g.fillRect(24, 88, 204, 7);
@@ -1127,6 +1306,7 @@ class Game {
 
         this.drawBoss(g, sw);
         this.drawMinimap(g, sw, sh);
+        this.drawClash(g, sw, sh);
 
         // --- banner ---
         if (this.bannerT > 0 && this.bannerBig !== null) {
@@ -1160,13 +1340,12 @@ class Game {
             }
         }
 
-        if (this.paused && !this.showHelp) this.drawPauseMenu(g, sw, sh);
+        if (this.paused) this.drawPauseMenu(g, sw, sh);
         if (this.saveNoteT > 0 && this.saveNote !== null) {
             g.font = HUD_FONT;
             const a = U.clamp(this.saveNoteT * 2, 0, 1);
             this.text(g, this.saveNote, sw / 2, 112, U.alpha(this.saveNoteOk ? rgb(200, 235, 190) : rgb(255, 110, 90), a), true);
         }
-        if (this.showHelp) this.drawHelp(g, sw, sh);
     }
 
     pauseButton(g, action, title, copy, x, y, w, h, opts) {
@@ -1178,10 +1357,20 @@ class Game {
         setStroke(g, 1, false);
         g.strokeStyle = disabled ? 'rgb(57,49,44)' : o.primary ? 'rgb(164,79,59)' : o.danger ? 'rgb(112,54,47)' : 'rgb(84,66,54)';
         g.stroke();
-        g.font = 'bold 16px serif';
+        g.save();
+        g.beginPath();
+        g.rect(x + 4, y, w - 8, h);
+        g.clip();
+        const fit = (s, base, min, style, maxW) => {
+            let px = base;
+            g.font = style + px + 'px ' + (style ? 'serif' : 'sans-serif');
+            while (px > min && g.measureText(s).width > maxW) { px--; g.font = style + px + 'px ' + (style ? 'serif' : 'sans-serif'); }
+        };
+        fit(title, 16, 11, 'bold ', w - 28 - (o.key ? 30 : 0));
         this.text(g, title, x + 14, y + 22, disabled ? rgb(113,103,94) : rgb(244,233,216), false);
-        g.font = '12px sans-serif';
+        fit(copy, 12, 8, '', w - 28);
         this.text(g, copy, x + 14, y + 41, disabled ? rgb(90,83,78) : rgb(177,161,145), false);
+        g.restore();
         if (o.key) {
             g.font = 'bold 12px monospace';
             this.text(g, o.key, x + w - 14, y + 22, disabled ? rgb(90,83,78) : rgb(214,183,133), true);
@@ -1192,8 +1381,24 @@ class Game {
         this.pauseRects = [];
         g.fillStyle = 'rgba(5,4,4,0.82)';
         g.fillRect(0, 0, sw, sh);
-        const W = Math.min(940, sw - 28), H = Math.min(650, sh - 28);
-        const X = Math.floor((sw - W) / 2), Y = Math.floor((sh - H) / 2);
+        const sideGap = 18, minW = 800;
+        let W = Math.min(940, sw - 28), H = Math.min(650, sh - 28);
+        let X = Math.floor((sw - W) / 2);
+        const Y = Math.floor((sh - H) / 2);
+        // keybinds sit in the free space left of the panel; the panel never shrinks below minW (its button text needs it)
+        const free = sw - 28 - sideGap;
+        let sideW = 0;
+        if (free - 940 >= 280) {
+            W = 940;
+            sideW = U.clamp(Math.floor((sw - W) / 2) - sideGap - 14, 280, 340);
+        } else if (free - minW >= 220) {
+            sideW = Math.min(280, free - minW);
+            W = free - sideW;
+        }
+        if (sideW > 0) {
+            if (X < sideW + sideGap + 14) X = 14 + sideW + sideGap + Math.floor((free - sideW - W) / 2);
+            this.drawPauseKeybinds(g, X - sideGap - sideW, Y, sideW, H);
+        }
         const grad = g.createLinearGradient(X, Y, X + W, Y + H);
         grad.addColorStop(0, 'rgba(30,23,20,0.98)');
         grad.addColorStop(1, 'rgba(15,13,12,0.98)');
@@ -1213,9 +1418,11 @@ class Game {
         g.font = 'bold 18px ' + KANJI_FAMILY;
         this.text(g, '\u4e00\u6642\u505c\u6b62', X + 28, Y + 94, rgb(168,139,101), false);
         g.font = 'bold 13px sans-serif';
-        this.text(g, 'JOURNEY PAUSED', X + W - 28, Y + 54, rgb(213,91,70), true);
+        const pauseStatus = 'JOURNEY PAUSED';
+        this.text(g, pauseStatus, X + W - 28 - g.measureText(pauseStatus).width / 2, Y + 54, rgb(213,91,70), true);
         g.font = '12px sans-serif';
-        this.text(g, 'Esc resumes the game', X + W - 28, Y + 76, rgb(157,143,130), true);
+        const pauseHint = 'Esc resumes the game';
+        this.text(g, pauseHint, X + W - 28 - g.measureText(pauseHint).width / 2, Y + 76, rgb(157,143,130), true);
 
         const pad = 28, gap = 18, top = Y + 116;
         const colW = (W - pad * 2 - gap) / 2;
@@ -1237,7 +1444,7 @@ class Game {
         this.pauseButton(g, 'export', 'Export Save File', this.guestJourney ? 'Unavailable to co-op guests.' : 'Create a portable backup of your journey.',
             rx, y, colW, 52, { key: 'X', disabled: this.guestJourney });
         y += 60;
-        this.pauseButton(g, 'controls', 'Controls & Guide', 'Review combat, exploration, and keyboard controls.', lx, y, colW, 52, { key: 'H' });
+        this.pauseButton(g, 'main-menu', 'Return to Main Menu', 'Save progress and leave the current journey.', lx, y, colW, 52, { danger: true, key: 'Q' });
         this.pauseButton(g, 'import', 'Import Save File', this.guestJourney ? 'Unavailable to co-op guests.' : 'Restore a previously exported journey.',
             rx, y, colW, 52, { key: 'L', disabled: this.guestJourney });
 
@@ -1251,7 +1458,10 @@ class Game {
             : this.resetMapConfirmT > 0 ? 'Select again to rebuild the world; gear and progress remain.' : 'Rebuild the world while keeping gear, skills, and EXP.';
         this.pauseButton(g, 'reset', resetTitle, resetCopy, lx, y, colW, 52,
             { danger: true, key: 'M', disabled: resetDisabled });
-        this.pauseButton(g, 'main-menu', 'Return to Main Menu', 'Save progress and leave the current journey.', rx, y, colW, 52, { danger: true, key: 'Q' });
+        this.pauseButton(g, 'new-game', this.newGameConfirmT > 0 ? 'Confirm New Game' : 'Start New Game',
+            this.guestJourney ? 'Unavailable to co-op guests.'
+                : this.newGameConfirmT > 0 ? 'Select again to ERASE your save and start over.' : 'Erase this save and begin a fresh journey.',
+            rx, y, colW, 52, { danger: true, key: 'N', disabled: !!this.guestJourney || !!this.coop });
 
         if (this.coop && this.coop.host) {
             y += 60;
@@ -1324,6 +1534,46 @@ class Game {
             if (U.dist(e.x, e.y, player.x, player.y) > 1500) continue;
             g.fillRect(mx + Math.trunc(e.x * sc) - 1, my + Math.trunc(e.y * sc) - 1, 3, 3);
         }
+        const finalBoss = this.enemies.find(e => e.boss && e.st !== 'DEAD');
+        if (finalBoss) {
+            const bx = mx + Math.trunc(finalBoss.x * sc), by = my + Math.trunc(finalBoss.y * sc);
+            g.beginPath();
+            g.moveTo(bx, by - 7);
+            g.lineTo(bx + 7, by);
+            g.lineTo(bx, by + 7);
+            g.lineTo(bx - 7, by);
+            g.closePath();
+            g.fillStyle = 'rgb(255,80,60)';
+            g.fill();
+            setStroke(g, 1, false);
+            g.strokeStyle = '#fff';
+            g.stroke();
+        }
+        if (this.coop) {
+            const slot = this.coop.slot;
+            for (const [id, b] of this.coop.bodies) {
+                if (!b || b === player || id === slot) continue;
+                const bx = mx + U.clamp(b.x * sc, 0, M), by = my + U.clamp(b.y * sc, 0, M), bf = b.facing || 0;
+                const dead = b.st === 'DEAD';
+                g.beginPath();
+                g.moveTo(bx + Math.cos(bf) * 7, by + Math.sin(bf) * 7);
+                g.lineTo(bx + Math.cos(bf + 2.5) * 5, by + Math.sin(bf + 2.5) * 5);
+                g.lineTo(bx + Math.cos(bf - 2.5) * 5, by + Math.sin(bf - 2.5) * 5);
+                g.closePath();
+                g.fillStyle = dead ? 'rgb(120,120,120)' : 'rgb(90,220,255)';
+                g.fill();
+                setStroke(g, 1, false);
+                g.strokeStyle = '#000';
+                g.stroke();
+                g.font = 'bold 10px sans-serif';
+                g.textAlign = 'center';
+                g.textBaseline = 'bottom';
+                g.fillStyle = dead ? 'rgb(150,150,150)' : 'rgb(170,240,255)';
+                g.fillText('P' + (id + 1), bx, by - 6);
+                g.textAlign = 'left';
+                g.textBaseline = 'alphabetic';
+            }
+        }
         const px = mx + player.x * sc, py = my + player.y * sc, f = player.facing;
         g.beginPath();
         g.moveTo(px + Math.cos(f) * 7, py + Math.sin(f) * 7);
@@ -1338,66 +1588,77 @@ class Game {
             Math.trunc(sw * sc), Math.trunc(sh * sc));
     }
 
-    drawHelp(g, sw, sh) {
-        g.fillStyle = 'rgba(10,8,8,0.843)';
-        g.fillRect(0, 0, sw, sh);
-        g.font = 'bold 54px serif';
-        this.text(g, "RONIN'S PATH", sw / 2, 90, rgb(230, 60, 50), true);
-        g.font = SUB_FONT;
-        this.text(g,         'Five elite warriors await alone in their strongholds (purple on the map). Learn their unique strikes and cut them down.', sw / 2, 124,
-            rgb(225, 215, 200), true);
+    drawPauseKeybinds(g, x, y, w, h) {
+        roundRectPath(g, x, y, w, h, 10);
+        g.fillStyle = 'rgba(20,16,14,0.95)';
+        g.fill();
+        setStroke(g, 1, false);
+        g.strokeStyle = 'rgb(84,64,50)';
+        g.stroke();
+        g.fillStyle = 'rgb(184,73,54)';
+        g.fillRect(x + 20, y + 22, 36, 3);
+        g.font = 'bold 20px serif';
+        this.text(g, 'Keybinds', x + 20, y + 52, rgb(226, 211, 188), false);
         const rows = [
             ['WASD', 'Move'],
-            ['Mouse', 'Aim / face direction'],
-            ['Left Click / J', 'Attack (3-hit combo, buffered)'],
-            ['Right Click / K', 'Tap right before a hit to DEFLECT. Hold to block (costs posture).'],
-            ['Space / L', 'Tap to dodge (invincible frames, dashes forward with no direction). Hold to sprint.'],
-            ['Dodge INTO a thrust', 'MIKIRI COUNTER a perilous thrust (red kanji)'],
+            ['Mouse', 'Aim'],
+            ['LMB / J', 'Attack (3-hit combo)'],
+            ['Hold LMB', 'Heavy strike'],
+            ['RMB / K', 'Tap: deflect   Hold: block'],
+            ['Space / L', 'Tap: dodge   Hold: sprint'],
+            ['Dodge into thrust', 'Mikiri counter'],
+            ['Block + Atk / R', 'Combat Art'],
+            ['F', 'Iai Flash (full Ki)'],
+            ['G', 'Dragon Flash (full Ki)'],
+            ['T', 'Throw weapon'],
             ['Q', 'Drink healing gourd'],
-            ['T', 'Throw equipped weapon (limited; refills at shrines)'],
-            ['F', 'Iai Flash - dash-slash through enemies (needs full Ki)'],
-            ['G', 'Dragon Flash - a long-range cut (learn it in the Skill Tree, needs full Ki)'],
-            ['Hold Left Click', 'Heavy strike (katana and spear thrusts can be Mikiri-countered)'],
-            ['Hold Block + Attack / R', 'Combat Art - charged by deflects & Mikiri counters, not spammable'],
-            ['Tab / I', 'Equipment (arts, weapon, throws, armor, charm, appearance) and the Skill Tree'],
-            ['E', 'Rest at shrine (heal, refill gourds and throws) - not while enemies are near'],
-            ['Hold block + walk', 'Sneak. Reach an unaware enemy for a STEALTH DEATHBLOW'],
+            ['E', 'Rest at shrine / revive'],
+            ['Block + walk', 'Sneak (stealth deathblow)'],
+            ['Tab / I', 'Equipment & skills'],
+            ['Esc', 'Pause / resume'],
+            ['Click circles', 'Win a sword clash'],
         ];
-        let y = 178;
-        for (const r of rows) {
-            g.font = HUD_FONT;
-            this.text(g, r[0], sw / 2 - 320, y, rgb(255, 200, 110), false);
-            g.font = SMALL_FONT;
-            this.text(g, r[1], sw / 2 - 110, y, rgb(230, 225, 215), false);
-            y += 28;
+        // measure everything so text stays inside the panel: wrap long descriptions, shrink the font if still too tall
+        const pad = 18, innerW = w - pad * 2, top = y + 74, bottom = y + h - 14;
+        const wrap = (s, maxW) => {
+            const lines = [];
+            let line = '';
+            for (const word of s.split(/\s+/)) {
+                const next = line ? line + ' ' + word : word;
+                if (line && g.measureText(next).width > maxW) {
+                    lines.push(line);
+                    line = word;
+                } else line = next;
+            }
+            if (line) lines.push(line);
+            return lines;
+        };
+        let layout = null;
+        for (let size = 13; size >= 9; size--) {
+            g.font = 'bold ' + size + 'px monospace';
+            const keyW = Math.min(innerW * 0.5, Math.max(...rows.map(r => g.measureText(r[0]).width)) + 12);
+            const keyLines = rows.map(r => wrap(r[0], keyW - 8));
+            g.font = size + 'px sans-serif';
+            const descLines = rows.map(r => wrap(r[1], innerW - keyW));
+            const lineH = size + 4, gap = Math.max(3, size - 6);
+            const total = rows.reduce((sum, r, i) => sum + Math.max(keyLines[i].length, descLines[i].length) * lineH + gap, 0);
+            layout = { size, keyW, keyLines, descLines, lineH, gap, total };
+            if (total <= bottom - top) break;
         }
-        y += 14;
-        g.font = 'bold 20px serif';
-        this.text(g, 'The Way of the Sword', sw / 2, y, rgb(230, 60, 50), true);
-        y += 26;
-        g.font = SMALL_FONT;
-        const tips = [
-            'A white GLINT on an enemy blade means the strike is about to land - that is your deflect cue.',
-            'Deflects crush enemy POSTURE. Fill the posture bar and a red mark appears: strike for a DEATHBLOW.',
-            'Mashing the parry button shrinks your deflect window. Rhythm beats panic. Successful deflects reset it.',
-            'Perilous attacks (red kanji) cannot be blocked: dodge sweeps, and Mikiri-counter thrusts.',
-            'Enemies brace through one hit mid-swing. Break posture, catch their recovery, or deflect the final hit.',
-            'Elites need two deathblows.  Defeated enemies grant EXP; every bar filled is a skill point. Death costs half your EXP.',
-        ];
-        for (const s of tips) {
-            this.text(g, s, sw / 2, y, rgb(215, 205, 190), true);
-            y += 22;
+        const L = layout, spare = Math.max(0, bottom - top - L.total);
+        const extra = Math.min(10, spare / rows.length);
+        g.save();
+        roundRectPath(g, x, y, w, h, 10);
+        g.clip();
+        let ry = top + L.size;
+        for (let i = 0; i < rows.length; i++) {
+            g.font = 'bold ' + L.size + 'px monospace';
+            L.keyLines[i].forEach((s, j) => this.text(g, s, x + pad, ry + j * L.lineH, rgb(214, 183, 133), false));
+            g.font = L.size + 'px sans-serif';
+            L.descLines[i].forEach((s, j) => this.text(g, s, x + pad + L.keyW, ry + j * L.lineH, rgb(205, 192, 176), false));
+            ry += Math.max(L.keyLines[i].length, L.descLines[i].length) * L.lineH + L.gap + extra;
         }
-        g.font = HUD_FONT;
-        const begin = this.hasSave ? 'Press ENTER or click to continue your journey' : 'Press ENTER or click to begin';
-        this.text(g, begin + '     (H toggles this screen)', sw / 2, sh - 30,
-            rgb(255, 220, 150, Math.trunc(160 + 90 * Math.sin(this.realTime * 4))), true);
-        if (this.hasSave) {
-            g.font = SMALL_FONT;
-            const confirm = this.newGameConfirmT > 0;
-            this.text(g, confirm ? 'Press N again to erase your save and start a NEW GAME' : '[N] New Game', sw / 2, sh - 54,
-                confirm ? rgb(255, 110, 90) : rgb(190, 180, 165), true);
-        }
+        g.restore();
     }
 }
 

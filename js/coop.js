@@ -36,7 +36,6 @@ class Coop {
             this.game.note('Party disconnected. Continuing solo.', false);
         };
         game.coop = this;
-        game.showHelp = false;
     }
 
     /** Kept for the call sites that only ever expect a single partner. */
@@ -236,8 +235,7 @@ class Coop {
         if (Number.isInteger(d.elites) && (d.elites > game.elitesSlain || (d.defeated && !game.bossDefeated))) {
             const reward = d.elites > game.elitesSlain || (d.defeated && !game.bossDefeated);
             game.elitesSlain = d.elites;
-            game.player.baseMaxHp = 100 + 20 * d.elites + (d.defeated ? 40 : 0);
-            game.player.baseGourds = 3 + d.elites + (d.defeated ? 1 : 0);
+            Object.assign(game.player, playerProgression(d.elites, d.defeated));
             game.player.applyLoadout();
             if (reward) {
                 game.player.hp = game.player.maxHp;
@@ -282,8 +280,8 @@ class Coop {
             p.hurtFlash = 0.3;
             p.invuln = U.clamp(d.invuln, 0, 2);
             this.game.sfx.play('HURT');
-            if (Number.isFinite(d.poiseLeft)) p.poiseLeft = U.clamp(Math.min(p.poiseLeft, d.poiseLeft), 0, p.poise * 1.5);
-            if (d.st === 'ATTACK') this.game.fx.text('UNFLINCHING', p.x, p.y - 42, rgb(255, 190, 120), 14);
+            if (Number.isFinite(d.poiseLeft)) p.poiseLeft = U.clamp(Math.min(p.poiseLeft, d.poiseLeft), 0, p.poise * 5);
+            if (d.st === 'ATTACK' || d.st === 'ART') this.game.fx.text('UNFLINCHING', p.x, p.y - 42, rgb(255, 190, 120), 14);
         }
         if (d.st === 'DEAD') p.die();
         else if (d.st === 'STAGGER') {
