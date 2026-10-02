@@ -1,206 +1,278 @@
 'use strict';
 
-/**
- * PeerJS link for online play. A host keeps one connection per guest and relays traffic between them (star topology),
- * so a guest only ever talks to the host. A guest keeps a single connection to the host.
- */
-const NET_VERSION = 9;
-const ROOM_PREFIX = 'RONINSPATH-';
-const PING_EVERY_MS = 250;
+/** WebSocket room relay. All peers make outbound connections; room IDs are relay-side port identifiers. */
+const NET_VERSION = 10;
+const NET_URL_KEY = 'roninsPath.relayUrl.v1';
+const NET_PING_EVERY_MS = 1000;
 
-/** One peer-to-peer connection with its own round-trip measurement. */
 class NetConn {
-    constructor(c) {
-        this.c = c;
-        this.open = false;
-        this.rtt = 0;
-        this.peerRtt = 0;
-        this.lastHeard = performance.now();
+    constructor(link, id) {
+        this.link = link;
+        this.id = id;
         this.idx = -1;
         this.look = null;
+        this.open = true;
+        this.rtt = 0;
     }
 
-    get isOpen() { return this.open && this.c.open; }
-
-    ping() { return Math.max(this.rtt, this.peerRtt); }
-
-    send(obj) {
-        if (!this.isOpen) return;
-        try {
-            this.c.send(obj);
-        } catch (e) { /* channel closing */ }
-    }
+    get isOpen() { return this.open && !this.link.closed; }
+    ping() { return this.rtt; }
+    send(obj) { if (this.isOpen) this.link.target(this, obj); }
 }
 
 class DuelLink {
-    constructor(prefix = ROOM_PREFIX) {
-        this.prefix = prefix;
-        this.peer = null;
+    constructor(coop = false, endpoint = '') {
+        this.coop = !!coop;
+        this.endpoint = DuelLink.cleanEndpoint(endpoint) || DuelLink.defaultEndpoint();
+        this.socket = null;
         this.conns = [];
         this.role = null;
         this.handlers = new Map();
-        this.pingTimer = 0;
+        this.heartbeat = 0;
         this.closed = false;
+        this.opened = false;
+        this.roomCode = '';
+        this.lastHeard = performance.now();
+        this.serverRtt = 0;
         this.onOpen = null;
         this.onClose = null;
+        this.onRelayClose = null;
         this.onPeerOpen = null;
         this.onPeerClose = null;
-        // the menu narrows this once a lobby is full or a match has started
         this.accept = () => true;
     }
 
-    static available() { return typeof Peer !== 'undefined'; }
+    static available() { return typeof WebSocket !== 'undefined'; }
 
-    static newCode() {
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', a = new Uint32Array(6);
-        crypto.getRandomValues(a);
-        let s = '';
-        for (const v of a) s += chars[v % chars.length];
-        return s;
+    static defaultEndpoint() {
+        const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return scheme + '//' + location.host + '/ws';
     }
 
-    static cleanCode(s) {
-        return String(s || '').toUpperCase().replace(ROOM_PREFIX, '').replace(/[^A-Z0-9]/g, '').slice(0, 12);
-    }
-
-    static errorText(e) {
-        switch (e && e.type) {
-            case 'peer-unavailable': return 'No room found with that code. Check it and try again.';
-            case 'unavailable-id': return 'Room code collision - go back and host again.';
-            case 'network':
-            case 'server-error':
-            case 'socket-error':
-            case 'socket-closed': return 'Could not reach the matchmaking server. Check your internet connection.';
-            case 'browser-incompatible': return 'This browser does not support WebRTC.';
-            default: return 'Connection error' + (e && e.type ? ' (' + e.type + ')' : '') + '.';
+    static cleanEndpoint(value) {
+        if (typeof value !== 'string' || !value.trim()) return '';
+        try {
+            const url = new URL(value.trim(), location.href);
+            if (url.protocol === 'https:') url.protocol = 'wss:';
+            else if (url.protocol === 'http:') url.protocol = 'ws:';
+            if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password
+                || url.search || url.hash || !url.hostname) return '';
+            if (url.pathname === '/') url.pathname = '/ws';
+            return url.toString().replace(/\/$/, '');
+        } catch (e) {
+            return '';
         }
     }
 
-    /** First connection, kept for the paths that only ever have one. */
-    get conn() { return this.conns.length > 0 ? this.conns[0].c : null; }
+    static cleanCode(value) {
+        return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+    }
 
-    get connected() { return this.conns.some(c => c.isOpen); }
+    static errorText(e) {
+        if (e && typeof e.message === 'string') return e.message;
+        if (e && e.code === 'room-not-found') return 'No room found with that ID. Check it and try again.';
+        if (e && e.code === 'room-full') return 'That room is full or has already started.';
+        if (e && e.code === 'mode-mismatch') return 'That room is for a different multiplayer mode.';
+        return 'Could not connect to the multiplayer relay. Check the relay URL and your internet connection.';
+    }
+
+    get conn() { return this.socket; }
+    get connected() { return this.opened && this.socket !== null && this.socket.readyState === WebSocket.OPEN; }
 
     get lastHeard() {
-        let t = 0;
-        for (const c of this.conns) if (c.lastHeard > t) t = c.lastHeard;
-        return t;
+        return this._lastHeard || 0;
     }
+
+    set lastHeard(value) { this._lastHeard = value; }
+
+    ping() {
+        let result = 0;
+        for (const c of this.conns) result = Math.max(result, c.ping());
+        return Math.max(result, this.serverRtt);
+    }
+
+    on(type, fn) { this.handlers.set(type, fn); }
 
     host(onCode, onErr) {
         this.role = 'host';
-        const code = DuelLink.newCode();
-        this.peer = new Peer(this.prefix + code, { debug: 0 });
-        this.peer.on('open', () => onCode(code));
-        this.peer.on('error', e => onErr(e));
-        this.peer.on('connection', c => {
-            if (this.closed || !this.accept(this.conns.length)) {
-                c.on('open', () => {
-                    try {
-                        c.send({ t: 'full' });
-                    } catch (e) { /* already gone */ }
-                    setTimeout(() => c.close(), 300);
-                });
-                return;
+        this.connect(() => this.sendSystem({ op: 'create', v: NET_VERSION, coop: this.coop }), onErr, data => {
+            if (data.sys === 'created' && typeof data.code === 'string') {
+                this.roomCode = data.code;
+                if (onCode) onCode(data.code);
             }
-            this.wire(c);
         });
-        this.startPings();
     }
 
     join(code, onErr) {
         this.role = 'client';
-        this.peer = new Peer({ debug: 0 });
-        this.peer.on('open', () => this.wire(this.peer.connect(this.prefix + code, { reliable: true, serialization: 'json' })));
-        this.peer.on('error', e => onErr(e));
-        this.startPings();
+        const id = DuelLink.cleanCode(code);
+        this.connect(() => this.sendSystem({ op: 'join', code: id, v: NET_VERSION, coop: this.coop }), onErr);
     }
 
-    startPings() {
-        clearInterval(this.pingTimer);
-        this.pingTimer = setInterval(() => {
-            for (const n of this.conns) n.send({ t: 'ping', ts: performance.now(), rtt: n.rtt });
-        }, PING_EVERY_MS);
-    }
-
-    wire(c) {
-        const n = new NetConn(c);
-        this.conns.push(n);
-        c.on('open', () => {
-            n.open = true;
-            n.lastHeard = performance.now();
-            if (this.onPeerOpen) this.onPeerOpen(n);
-            if (this.onOpen) this.onOpen(n);
+    connect(onReady, onErr, onSystem) {
+        if (!DuelLink.available()) {
+            if (onErr) onErr(new Error('This browser does not support WebSockets.'));
+            return;
+        }
+        let errorReported = false;
+        const reportError = error => {
+            if (errorReported) return;
+            errorReported = true;
+            if (onErr) onErr(error);
+        };
+        let socket;
+        try {
+            socket = new WebSocket(this.endpoint);
+        } catch (e) {
+            reportError(e);
+            return;
+        }
+        this.socket = socket;
+        socket.addEventListener('open', () => {
+            if (this.closed) return socket.close();
+            this.opened = true;
+            this.lastHeard = performance.now();
+            this.heartbeat = setInterval(() => this.pingRelay(), NET_PING_EVERY_MS);
+            if (onReady) onReady();
         });
-        c.on('data', d => this.receive(d, n));
-        c.on('close', () => this.lost(n));
-        c.on('error', () => this.lost(n));
+        socket.addEventListener('message', event => {
+            let data;
+            try {
+                data = JSON.parse(event.data);
+            } catch (e) {
+                return;
+            }
+            if (!data || typeof data !== 'object') return;
+            this.lastHeard = performance.now();
+            if (data.sys === 'pong') return this.receivePong(data);
+            if (data.sys === 'error') {
+                reportError({ code: data.code, message: data.message });
+                return;
+            }
+            if (data.sys) {
+                if (data.sys === 'joined') {
+                    this.roomCode = data.code;
+                    if (this.onOpen) this.onOpen();
+                } else if (data.sys === 'peer-open') {
+                    this.openPeer(data.id);
+                } else if (data.sys === 'peer-close') {
+                    this.closePeer(data.id);
+                } else if (data.sys === 'data') {
+                    this.receiveData(data);
+                } else if (data.sys === 'host-closed') {
+                    this.closePeers();
+                    if (this.onClose) this.onClose();
+                }
+                if (onSystem) onSystem(data);
+                return;
+            }
+        });
+        socket.addEventListener('error', () => {
+            if (!this.opened) reportError(new Error('The relay connection failed.'));
+        });
+        socket.addEventListener('close', () => {
+            clearInterval(this.heartbeat);
+            const wasOpened = this.opened;
+            this.opened = false;
+            this.closePeers();
+            if (!this.closed && !wasOpened) reportError(new Error('The relay closed the connection.'));
+            else if (!this.closed && wasOpened) {
+                if (this.onClose) this.onClose();
+                if (this.onRelayClose) this.onRelayClose();
+            }
+        });
     }
 
-    /** Handlers receive (data, conn), so a host can tell its guests apart. */
-    on(type, fn) { this.handlers.set(type, fn); }
-
-    receive(d, n) {
-        if (this.closed || !d || typeof d !== 'object' || typeof d.t !== 'string') return;
-        n.lastHeard = performance.now();
-        if (d.t === 'ping') {
-            n.send({ t: 'pong', ts: d.ts });
-            if (Number.isFinite(d.rtt)) n.peerRtt = U.clamp(d.rtt, 0, 60000);
-            return;
-        }
-        if (d.t === 'pong') {
-            if (!Number.isFinite(d.ts)) return;
-            const s = performance.now() - d.ts;
-            if (s >= 0 && s < 60000) n.rtt = n.rtt === 0 ? s : n.rtt * 0.75 + s * 0.25;
-            return;
-        }
-        const h = this.handlers.get(d.t);
-        if (h) h(d, n);
-    }
-
-    /** Worst measurement across every peer, so each side judges the connection the same way. */
-    ping() {
-        let p = 0;
-        for (const n of this.conns) p = Math.max(p, n.ping());
-        return p;
+    sendSystem(message) {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+        this.socket.send(JSON.stringify(message));
     }
 
     send(obj) {
-        for (const n of this.conns) n.send(obj);
+        if (this.closed) return;
+        this.sendSystem({ op: 'send', data: obj });
     }
 
-    /** Host-only: pass a guest's message on to every other guest. */
+    target(conn, obj) {
+        if (this.closed) return;
+        this.sendSystem({ op: 'target', id: conn.id, data: obj });
+    }
+
     relay(obj, from) {
-        for (const n of this.conns) if (n !== from) n.send(obj);
+        if (this.closed) return;
+        this.sendSystem({ op: 'relay', except: from ? from.id : null, data: obj });
     }
 
-    drop(n) {
-        const i = this.conns.indexOf(n);
-        if (i < 0) return;
-        this.conns.splice(i, 1);
-        try {
-            n.c.close();
-        } catch (e) { /* already closed */ }
-        if (this.onPeerClose) this.onPeerClose(n);
-        if (this.conns.length === 0 && this.onClose) this.onClose();
+    pingRelay() {
+        if (!this.connected) return;
+        const ts = performance.now();
+        this.sendSystem({ op: 'ping', ts });
+        for (const c of this.conns) {
+            this.target(c, { t: 'net-ping', ts });
+        }
     }
 
-    lost(n) {
-        if (this.closed || this.conns.indexOf(n) < 0) return;
-        this.drop(n);
+    receivePong(data) {
+        if (!Number.isFinite(data.ts)) return;
+        const elapsed = performance.now() - data.ts;
+        if (elapsed < 0 || elapsed > 60000) return;
+        const c = data.id ? this.conns.find(peer => peer.id === data.id) : null;
+        if (c) c.rtt = c.rtt ? c.rtt * 0.75 + elapsed * 0.25 : elapsed;
+        else this.serverRtt = this.serverRtt ? this.serverRtt * 0.75 + elapsed * 0.25 : elapsed;
+    }
+
+    openPeer(id) {
+        if (typeof id !== 'string' || this.conns.some(c => c.id === id)) return;
+        const peer = new NetConn(this, id);
+        this.conns.push(peer);
+        if (this.onPeerOpen) this.onPeerOpen(peer);
+        if (!this.accept(this.conns.length - 1)) {
+            peer.send({ t: 'full' });
+            this.drop(peer);
+        }
+    }
+
+    closePeer(id, notify = true) {
+        const peer = this.conns.find(c => c.id === id);
+        if (!peer) return;
+        peer.open = false;
+        this.conns = this.conns.filter(c => c !== peer);
+        if (notify && this.onPeerClose) this.onPeerClose(peer);
+        if (notify && this.conns.length === 0 && this.role === 'host' && this.onClose) this.onClose();
+    }
+
+    closePeers(notify = true) {
+        for (const peer of this.conns.slice()) this.closePeer(peer.id, notify);
+    }
+
+    receiveData(packet) {
+        const peer = packet.from === 'host' ? null : this.conns.find(c => c.id === packet.from) || null;
+        const data = packet.data;
+        if (!data || typeof data !== 'object' || typeof data.t !== 'string') return;
+        if (data.t === 'net-ping' && this.role === 'client' && Number.isFinite(data.ts)) {
+            this.sendSystem({ op: 'client-pong', ts: data.ts });
+            return;
+        }
+        if (data.t === 'net-pong' && Number.isFinite(data.ts)) {
+            const elapsed = performance.now() - data.ts;
+            if (peer && elapsed >= 0 && elapsed < 60000) peer.rtt = peer.rtt ? peer.rtt * 0.75 + elapsed * 0.25 : elapsed;
+            return;
+        }
+        const handler = this.handlers.get(data.t);
+        if (handler) handler(data, peer);
+    }
+
+    drop(peer) {
+        if (!peer || !this.conns.includes(peer)) return;
+        this.sendSystem({ op: 'drop', id: peer.id });
+        this.closePeer(peer.id);
     }
 
     close() {
+        if (this.closed) return;
         this.closed = true;
-        clearInterval(this.pingTimer);
-        for (const n of this.conns) {
-            try {
-                n.c.close();
-            } catch (e) { /* already closed */ }
-        }
-        this.conns.length = 0;
-        try {
-            if (this.peer !== null) this.peer.destroy();
-        } catch (e) { /* already destroyed */ }
+        clearInterval(this.heartbeat);
+        if (this.socket && this.socket.readyState < WebSocket.CLOSING) this.socket.close(1000, 'Left room');
+        this.closePeers(false);
     }
 }

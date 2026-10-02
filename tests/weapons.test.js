@@ -299,7 +299,7 @@ assert.equal(vm.runInContext('sanitizeInput', context)([0, 0, 0, 0, 2048])[4], 2
 assert(vm.runInContext('PLAYER_SYNC', context).includes('throws'));
 assert(vm.runInContext('PLAYER_SYNC', context).includes('poiseLeft'));
 assert(vm.runInContext('COOP_PLAYER_FIELDS', context).includes('poiseLeft'));
-assert.equal(vm.runInContext('NET_VERSION', context), 9);
+assert.equal(vm.runInContext('NET_VERSION', context), 10);
 assert.equal(vm.runInContext('COOP_SYNC_INTERVAL', context), 0.05);
 const Duel = vm.runInContext('Duel', context);
 const duel = { n: 1, players: [p] };

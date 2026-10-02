@@ -1,6 +1,6 @@
 'use strict';
 
-/** Main menu: start the single-player journey, or host / join an online duel. */
+/** Main menu: start the single-player journey, or host / join online multiplayer. */
 (() => {
     const $ = id => document.getElementById(id);
     const menu = $('menu'), canvas = $('game');
@@ -8,6 +8,11 @@
     let link = null;
     let joinTimer = 0;
     let coopMode = false;
+    const params = new URLSearchParams(location.search);
+    const relayFromUrl = params.get('relay') || '';
+    const rememberedRelay = localStorage.getItem(NET_URL_KEY) || '';
+    const configuredRelay = DuelLink.cleanEndpoint(relayFromUrl || rememberedRelay);
+    const defaultRelay = configuredRelay || (location.hostname.endsWith('.github.io') ? '' : DuelLink.defaultEndpoint());
 
     const myLook = (() => {
         const lo = new Loadout();
@@ -29,6 +34,8 @@
     };
     const back = () => {
         dropLink();
+        $('host-relay-url').disabled = false;
+        $('join-relay-url').disabled = false;
         history.replaceState(null, '', location.href.split(/[?#]/)[0]);
         show('menu-main');
     };
@@ -56,8 +63,32 @@
         window.addEventListener('pagehide', () => l.close(), { once: true });
         game.run();
     };
-    const inviteUrl = code => location.href.split(/[?#]/)[0] + (coopMode ? '?coop=' : '?join=') + code;
+    const inviteUrl = code => {
+        const url = new URL(location.href);
+        url.search = '';
+        url.hash = '';
+        url.searchParams.set(coopMode ? 'coop' : 'join', code);
+        url.searchParams.set('relay', $('host-relay-url').value);
+        return url.toString();
+    };
     const netMissing = () => !DuelLink.available();
+    const getRelay = id => {
+        const input = $(id), endpoint = DuelLink.cleanEndpoint(input.value) || (!input.value.trim() ? defaultRelay : '');
+        if (!endpoint) return null;
+        input.value = endpoint;
+        localStorage.setItem(NET_URL_KEY, endpoint);
+        return endpoint;
+    };
+    $('host-relay-url').value = defaultRelay;
+    $('join-relay-url').value = defaultRelay;
+    for (const id of ['host-relay-url', 'join-relay-url']) $(id).addEventListener('change', () => {
+        const endpoint = getRelay(id);
+        if (endpoint) {
+            $('host-relay-url').value = endpoint;
+            $('join-relay-url').value = endpoint;
+        } else setStatus(id === 'host-relay-url' ? 'host-status' : 'join-status',
+            'Enter a valid relay URL using ws:// or wss://.', true);
+    });
     // only keep the appearance fields we know, whatever a peer sends
     const cleanLook = look => {
         const lo = new Loadout();
@@ -95,6 +126,11 @@
         canvas.focus();
         startJourney(canvas);
     };
+    $('btn-tutorial').onclick = () => {
+        const card = $('tutorial-card');
+        card.hidden = !card.hidden;
+        $('btn-tutorial').setAttribute('aria-expanded', String(!card.hidden));
+    };
     for (const b of document.querySelectorAll('#menu .back')) b.onclick = back;
 
     // ---------------- host ----------------
@@ -127,21 +163,27 @@
         $('duel-settings').hidden = isCoop;
         $('coop-settings').hidden = !isCoop;
         $('btn-start').textContent = isCoop ? 'Set Out Together' : 'Start Match';
-        $('host-code').textContent = '------';
+        $('host-code').textContent = '--------';
         $('host-link').value = '';
         $('host-players').textContent = '';
         $('btn-copy').disabled = true;
         $('btn-start').disabled = true;
+        $('host-relay-url').disabled = false;
         lobby = [];
         refreshLobby = () => {};
         fillSettings();
         $('set-max').disabled = duelSettings.mode !== 'ffa';
+        const endpoint = getRelay('host-relay-url');
+        if (!endpoint) {
+            setStatus('host-status', 'Enter a valid relay URL using ws:// or wss://.', true);
+            return;
+        }
         if (netMissing()) {
-            setStatus('host-status', 'Online play needs an internet connection (PeerJS failed to load).', true);
+            setStatus('host-status', 'This browser does not support WebSockets.', true);
             return;
         }
         setStatus('host-status', 'Creating room...');
-        const l = link = new DuelLink(isCoop ? 'RONINSPATH-COOP-' : undefined);
+        const l = link = new DuelLink(isCoop, endpoint);
         let open = false;
         refreshLobby = () => {
             if (link !== l || !open) return;
@@ -161,6 +203,7 @@
             open = true;
             $('host-code').textContent = code;
             $('host-link').value = inviteUrl(code);
+            $('host-relay-url').disabled = true;
             $('btn-copy').disabled = false;
             refreshLobby();
         }, e => {
@@ -191,6 +234,12 @@
         };
         l.onClose = () => {
             if (link === l) refreshLobby();
+        };
+        l.onRelayClose = () => {
+            if (link !== l) return;
+            $('btn-copy').disabled = true;
+            $('btn-start').disabled = true;
+            setStatus('host-status', 'The relay disconnected. Go back and create a new room.', true);
         };
     };
     $('btn-host').onclick = () => host(false);
@@ -235,7 +284,7 @@
     $('btn-copy').onclick = () => {
         const url = $('host-link').value;
         if (!url) return;
-        const done = () => setStatus('host-status', 'Invite link copied! Waiting for an opponent...');
+        const done = () => setStatus('host-status', 'Invite link copied. Waiting for players...');
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => {
             $('host-link').select();
             document.execCommand('copy');
@@ -252,18 +301,23 @@
     const join = () => {
         const code = DuelLink.cleanCode($('join-code').value);
         $('join-code').value = code;
-        if (code.length < 4) {
-            setStatus('join-status', 'Enter the room code your host gave you.', true);
+        if (code.length !== 8) {
+            setStatus('join-status', 'Enter the 8-character port ID your host gave you.', true);
             return;
         }
         if (netMissing()) {
-            setStatus('join-status', 'Online play needs an internet connection (PeerJS failed to load).', true);
+            setStatus('join-status', 'Online play needs an internet connection to reach the relay.', true);
             return;
         }
         dropLink();
         $('join-lobby').textContent = '';
         setStatus('join-status', 'Connecting...');
-        const l = link = new DuelLink(coopMode ? 'RONINSPATH-COOP-' : undefined);
+        const endpoint = getRelay('join-relay-url');
+        if (!endpoint) {
+            setStatus('join-status', 'Enter a valid relay URL using ws:// or wss://.', true);
+            return;
+        }
+        const l = link = new DuelLink(coopMode, endpoint);
         joinTimer = setTimeout(() => {
             if (link === l && !l.connected) {
                 dropLink();
@@ -327,7 +381,7 @@
         l.onClose = () => {
             if (link === l) {
                 link = null;
-                setStatus('join-status', 'The host closed the connection.', true);
+                setStatus('join-status', 'The host or relay closed the connection.', true);
             }
         };
     };
@@ -348,11 +402,11 @@
     });
 
     // invite links open straight into the join screen
-    const params = new URLSearchParams(location.search);
     const invite = params.get('coop') || params.get('join');
     if (invite) {
         openJoin(params.has('coop'));
         $('join-code').value = DuelLink.cleanCode(invite);
+        if (relayFromUrl) $('join-relay-url').value = DuelLink.cleanEndpoint(relayFromUrl) || defaultRelay;
         join();
     } else show('menu-main');
 })();

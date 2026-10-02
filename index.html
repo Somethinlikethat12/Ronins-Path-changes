@@ -80,10 +80,22 @@
         #menu .menu-group h2 { margin: 0 0 3px; color: #d6b987; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; }
         #menu .menu-group > p { margin: 0 0 5px; min-height: 40px; color: #9f9180; font-size: 13px; }
         #menu .menu-choice { display: grid; gap: 4px; min-height: 58px; padding: 10px 13px; text-align: left; }
+        #menu .menu-choice.secondary { min-height: 44px; background: transparent; border-color: #44372e; font-size: 15px; }
         #menu .menu-choice.primary { background: linear-gradient(135deg, #712e25, #3f1c18); border-color: #a7533f; }
         #menu .choice-title { font-size: 16px; }
         #menu .choice-copy { color: #b5a595; font: 12px/1.3 Arial, sans-serif; font-weight: normal; }
         #menu .menu-choice.primary .choice-copy { color: #e1c9b6; }
+        #menu .tutorial-card { padding: 12px; background: rgba(0, 0, 0, 0.2); border: 1px solid #44372e; border-radius: 5px; }
+        #menu .tutorial-card[hidden] { display: none; }
+        #menu .tutorial-card h3, #menu .changelog h2 {
+            margin: 0 0 7px; color: #d6b987; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase;
+        }
+        #menu .tutorial-card ul, #menu .changelog ul { margin: 0; padding-left: 18px; color: #c9bba5; font: 12px/1.55 Arial, sans-serif; }
+        #menu .tutorial-card li + li, #menu .changelog li + li { margin-top: 3px; }
+        #menu .tutorial-card strong { color: #eadfcf; }
+        #menu .changelog { padding-top: 2px; border-top: 1px solid #352a23; }
+        #menu .changelog ul { columns: 2; column-gap: 28px; }
+        #menu .changelog li { break-inside: avoid; }
         #menu .menu-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
         #menu .menu-footer .note { max-width: 700px; font-size: 12px; }
         #menu .main-panel a.feedback { position: static; flex: 0 0 auto; padding: 9px 12px; font-size: 13px; }
@@ -91,6 +103,7 @@
             #menu { padding: 12px 0; }
             #menu .main-panel { width: calc(100vw - 20px); max-height: calc(100vh - 24px); gap: 13px; padding: 20px 15px; }
             #menu .menu-actions { grid-template-columns: 1fr; gap: 10px; }
+            #menu .changelog ul { columns: 1; }
             #menu .menu-group { gap: 7px; padding: 12px; }
             #menu .menu-group > p { min-height: 0; }
             #menu .menu-choice { min-height: 52px; }
@@ -126,10 +139,23 @@
                         <span class="choice-title">Begin Journey</span>
                         <span class="choice-copy">Continue your saved adventure or start a new one.</span>
                     </button>
+                    <button class="menu-choice secondary" id="btn-tutorial" type="button" aria-expanded="false" aria-controls="tutorial-card">
+                        How to play
+                    </button>
+                    <section class="tutorial-card" id="tutorial-card" aria-label="Getting started" hidden>
+                        <h3>Getting started</h3>
+                        <ul>
+                            <li><strong>Move:</strong> WASD or arrow keys; aim with the mouse.</li>
+                            <li><strong>Fight:</strong> Left-click to attack; time right-click or K to deflect.</li>
+                            <li><strong>Evade:</strong> Tap Space or L to dodge; hold while moving to sprint.</li>
+                            <li><strong>Explore:</strong> Press E at shrines to rest. Use Q to heal and Tab for gear and skills.</li>
+                            <li><strong>Learn:</strong> Press Esc for the full controls and pause options.</li>
+                        </ul>
+                    </section>
                 </section>
                 <section class="menu-group">
                     <h2>Play together</h2>
-                    <p>Share the journey or test your skill in an online duel.</p>
+                    <p>Share the journey or test your skill in an online duel using a hosted relay room.</p>
                     <button class="menu-choice" id="btn-host-coop">
                         <span class="choice-title">Host Co-op Journey</span>
                         <span class="choice-copy">Invite friends into your world; the host saves progress.</span>
@@ -148,8 +174,15 @@
                     </button>
                 </section>
             </div>
+            <section class="changelog" aria-labelledby="changelog-title">
+                <h2 id="changelog-title">Recent updates</h2>
+                <ul>
+                    <li>Multiplayer rooms now use hosted relay IDs, with no router setup needed.</li>
+                    <li>Co-op movement and enemy attack, hit, and deflect feedback are smoother.</li>
+                </ul>
+            </section>
             <footer class="menu-footer">
-                <p class="note">Online play requires an internet connection. Co-op guests do not save journey progress.</p>
+                <p class="note">Online play uses a hosted relay; no router setup is needed. Co-op guests do not save journey progress.</p>
                 <a class="feedback" href="https://github.com/harpermoor/Ronins-Path/issues/new" target="_blank" rel="noopener noreferrer" title="Opens public GitHub Issues">Send Feedback</a>
             </footer>
         </div>
@@ -173,10 +206,11 @@
                 <label>Enemy strength per extra player %<input id="co-enemy" type="number" min="0" max="150" step="5"></label>
                 <label>Enemy numbers per extra player %<input id="co-count" type="number" min="0" max="150" step="5"></label>
             </div>
-            <p>Room code</p>
-            <div class="code" id="host-code">------</div>
+            <p>Room / port ID</p>
+            <div class="code" id="host-code">--------</div>
             <input id="host-link" readonly placeholder="Invite link">
-            <button id="btn-copy" disabled>Copy Invite Link</button>
+            <label>Relay server<input id="host-relay-url" type="url" placeholder="wss://your-relay.example.com/ws" autocomplete="url" spellcheck="false"></label>
+            <button id="btn-copy" disabled>Copy Port ID / Invite Link</button>
             <p class="note" id="host-players"></p>
             <button id="btn-start" disabled>Start Match</button>
             <p class="status" id="host-status"></p>
@@ -185,7 +219,8 @@
         <div class="panel" id="menu-join" hidden>
             <h2>Join a Duel</h2>
             <p>Enter the room code from your host, or open their invite link.</p>
-            <input id="join-code" maxlength="24" placeholder="ROOM CODE" autocomplete="off" spellcheck="false">
+            <input id="join-code" minlength="8" maxlength="8" placeholder="PORT ID" autocomplete="off" spellcheck="false">
+            <label>Relay server<input id="join-relay-url" type="url" placeholder="wss://your-relay.example.com/ws" autocomplete="url" spellcheck="false"></label>
             <button id="btn-join-go">Join</button>
             <p class="note" id="join-lobby"></p>
             <p class="status" id="join-status"></p>
@@ -205,7 +240,6 @@
     <script src="js/settings.js"></script>
     <script src="js/save.js"></script>
     <script src="js/game.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="js/net.js"></script>
     <script src="js/coop.js"></script>
     <script src="js/duel.js"></script>
