@@ -299,7 +299,8 @@ assert.equal(vm.runInContext('sanitizeInput', context)([0, 0, 0, 0, 2048])[4], 2
 assert(vm.runInContext('PLAYER_SYNC', context).includes('throws'));
 assert(vm.runInContext('PLAYER_SYNC', context).includes('poiseLeft'));
 assert(vm.runInContext('COOP_PLAYER_FIELDS', context).includes('poiseLeft'));
-assert.equal(vm.runInContext('NET_VERSION', context), 8);
+assert.equal(vm.runInContext('NET_VERSION', context), 9);
+assert.equal(vm.runInContext('COOP_SYNC_INTERVAL', context), 0.05);
 const Duel = vm.runInContext('Duel', context);
 const duel = { n: 1, players: [p] };
 p.st = 'THROW';
@@ -322,4 +323,41 @@ assert.equal(p.throws, 3);
 p.throws = 0;
 p.respawn(shrine.x, shrine.y);
 assert.equal(p.throws, 3);
+
+g.player = p;
+Object.assign(g, { parryBurst() {}, hitstop() {}, shake() {}, zoomKick() {}, flash() {} });
+fxEvents.length = 0;
+Coop.prototype.receiveImpact.call({ game: g }, {
+    result: vm.runInContext('P_DEFLECT', context), hp: p.hp, posture: p.posture, ki: p.ki,
+    artCharges: p.artCharges, st: p.st, deflectStreak: 2, sourceX: p.x + 20, sourceY: p.y,
+});
+assert(p.guardFlash > 0);
+assert(fxEvents.some(e => e.name === 'sparks'));
+assert(fxEvents.some(e => e.name === 'ring'));
+assert(fxEvents.some(e => e.name === 'text'));
+Coop.prototype.receiveImpact.call({ game: g }, {
+    result: vm.runInContext('P_HIT', context), hp: p.hp - 10, posture: p.posture + 5, ki: p.ki,
+    artCharges: p.artCharges, st: 'STAGGER', stT: 0.08, staggerDur: 0.55, guarding: false,
+    vx: -230, vy: 40, invuln: 0.35, poiseLeft: p.poiseLeft, sourceX: p.x + 20, sourceY: p.y,
+});
+assert.equal(p.st, 'STAGGER');
+assert.equal(p.stT, 0.08);
+assert.equal(p.staggerDur, 0.55);
+assert.equal(p.vx, -230);
+assert.equal(p.vy, 40);
+
+let now = 0;
+context.performance = { now: () => now };
+const coop = { renderPositions: new Map() }, entity = { x: 0, y: 0, facing: 0 };
+Coop.prototype.updateRenderPosition.call(coop, entity);
+entity.x = 100;
+entity.y = 50;
+Coop.prototype.updateRenderPosition.call(coop, entity);
+now = 25;
+let renderedX = 0, renderedY = 0;
+Coop.prototype.drawEntity.call(coop, entity, () => { renderedX = entity.x; renderedY = entity.y; });
+assert.equal(renderedX, 50);
+assert.equal(renderedY, 25);
+assert.equal(entity.x, 100);
+assert.equal(entity.y, 50);
 console.log('Weapon and throwable checks passed');

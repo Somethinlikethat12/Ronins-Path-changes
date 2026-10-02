@@ -1073,15 +1073,27 @@ class Game {
         this.drawShrineWard(g);
         world.drawObstacles(g, vis, this.time);
         const visEnemies = this.enemies.filter(e => e.x > l - 100 && e.x < r + 100 && e.y > t - 100 && e.y < b + 100);
-        for (const e of visEnemies) if (e.st === 'DEAD') e.draw(g, this.time);
-        for (const e of visEnemies) if (e.st !== 'DEAD') e.draw(g, this.time);
+        for (const e of visEnemies) if (e.st === 'DEAD') {
+            const draw = () => e.draw(g, this.time);
+            if (this.coop !== null) this.coop.drawEntity(e, draw);
+            else draw();
+        }
+        for (const e of visEnemies) if (e.st !== 'DEAD') {
+            const draw = () => e.draw(g, this.time);
+            if (this.coop !== null) this.coop.drawEntity(e, draw);
+            else draw();
+        }
         if (this.coop !== null) this.coop.draw(g);
         player.draw(g, this.time);
         this.fx.drawWorld(g);
         world.drawCanopies(g, vis, player.x, player.y, this.time);
         this.fx.drawPetals(g);
         const db = this.deathblowTarget();
-        for (const e of visEnemies) e.drawOverlay(g, this.time, KANJI_FONT, e === db && this.stealthable(e));
+        for (const e of visEnemies) {
+            const draw = () => e.drawOverlay(g, this.time, KANJI_FONT, e === db && this.stealthable(e));
+            if (this.coop !== null) this.coop.drawEntity(e, draw);
+            else draw();
+        }
         this.fx.drawTexts(g);
         g.restore();
 

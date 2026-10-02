@@ -5,6 +5,7 @@ const COOP_ENEMY_FIELDS = ['x', 'y', 'facing', 'st', 'stT', 'stDur', 'hp', 'post
 const COOP_PLAYER_FIELDS = ['x', 'y', 'facing', 'st', 'stT', 'phase', 'combo', 'guarding', 'guardHeld', 'sprinting',
     'walkAnim', 'scarf', 'swingSign', 'stabAttack', 'hurtFlash', 'invuln', 'vx', 'vy', 'hp', 'maxHp', 'maxGourds', 'maxPosture',
     'posture', 'deflectStreak', 'deflectPost', 'dmgTaken', 'guardWindow', 'stealth', 'dodgeIframes', 'poiseLeft'];
+const COOP_SYNC_INTERVAL = 0.05;
 
 class Coop {
     constructor(game, link, host, settings, slot) {
@@ -17,6 +18,7 @@ class Coop {
         this.bodies = new Map();
         this.sendT = 0;
         this.attackId = 0;
+        this.renderPositions = new Map();
         this.lastAttackId = new Map();
         this.deadSeen = new Map();
         if (host) for (const c of link.conns) this.bodyFor(c.idx);
@@ -113,7 +115,7 @@ class Coop {
     tick(dt) {
         this.sendT -= dt;
         if (this.sendT > 0) return;
-        this.sendT = this.host ? 0.12 : 0.05;
+        this.sendT = COOP_SYNC_INTERVAL;
         if (this.host) {
             const game = this.game, p = game.player, party = this.party;
             const near = (x, y) => U.dist(x, y, p.x, p.y) <= 2200 || party.some(b => U.dist(x, y, b.x, b.y) <= 2200);
@@ -197,6 +199,7 @@ class Coop {
                 Coop.apply(b, entry[1], COOP_PLAYER_FIELDS);
                 b.cur = b.stabAttack ? b.stabAtk : (b.comboAtk[U.clamp(b.combo, 0, 2)] || b.comboAtk[0]);
                 b.curArt = b.art;
+                this.updateRenderPosition(b);
             }
             for (const id of [...this.bodies.keys()]) if (!seen.has(id)) this.bodies.delete(id);
         }
@@ -219,6 +222,7 @@ class Coop {
             if (e.st !== 'DEAD' && state.st === 'DEAD') newlyDead.push(e);
             Coop.apply(e, state, COOP_ENEMY_FIELDS);
             e.atk = state.atk ? Object.values(EA).find(a => a.name === state.atk) || null : null;
+            this.updateRenderPosition(e);
         }
         for (const id of d.dead) {
             const e = Number.isInteger(id) ? game.enemies[id] : null;
@@ -255,13 +259,15 @@ class Coop {
     }
 
     /** Host-only: tell one guest what just happened to their own body. */
-    impact(p, result) {
+    impact(p, result, sourceX, sourceY, perilous = false) {
         let id = -1;
         for (const [k, b] of this.bodies) if (b === p) id = k;
         const c = this.connFor(id);
         if (c === null) return;
         c.send({ t: 'coop-impact', result, hp: p.hp, posture: p.posture, ki: p.ki,
-            artCharges: p.artCharges, st: p.st, invuln: p.invuln, poiseLeft: p.poiseLeft });
+            artCharges: p.artCharges, st: p.st, stT: p.stT, staggerDur: p.staggerDur, guarding: p.guarding,
+            vx: p.vx, vy: p.vy, invuln: p.invuln, poiseLeft: p.poiseLeft, deflectStreak: p.deflectStreak,
+            sourceX, sourceY, perilous });
     }
 
     receiveImpact(d) {
@@ -271,23 +277,70 @@ class Coop {
         p.posture = U.clamp(d.posture, 0, p.maxPosture);
         if (Number.isFinite(d.ki)) p.ki = U.clamp(d.ki, 0, 100);
         if (Number.isFinite(d.artCharges)) p.artCharges = U.clamp(d.artCharges, 0, p.maxArtCharges);
+        if (Number.isFinite(d.vx)) p.vx = U.clamp(d.vx, -1000, 1000);
+        if (Number.isFinite(d.vy)) p.vy = U.clamp(d.vy, -1000, 1000);
+        if (typeof d.guarding === 'boolean') p.guarding = d.guarding;
+        if (Number.isFinite(d.deflectStreak)) p.deflectStreak = U.clamp(d.deflectStreak, 0, 6);
         if (d.result === P_DEFLECT) {
             p.guardFlash = 0.25;
+            const ang = Number.isFinite(d.sourceX) && Number.isFinite(d.sourceY)
+                ? Math.atan2(d.sourceY - p.y, d.sourceX - p.x) : p.facing;
+            const cx = p.x + Math.cos(ang) * (p.r + 12), cy = p.y + Math.sin(ang) * (p.r + 12);
+            const k = Math.min(p.deflectStreak || 1, 6);
+            this.game.fx.sparks(cx, cy, ang, 2.8, 36 + k * 8, 620 + k * 50, rgb(255, 200, 80));
+            this.game.fx.sparks(cx, cy, ang + Math.PI / 2, 0.6, 8 + k, 460, WHITE);
+            this.game.fx.sparks(cx, cy, ang - Math.PI / 2, 0.6, 8 + k, 460, WHITE);
+            this.game.fx.ring(cx, cy, 4, 50 + k * 8, 0.25, 4, rgb(255, 240, 180));
+            this.game.fx.ring(cx, cy, 2, 100 + k * 14, 0.4, 2, rgb(255, 255, 255));
+            this.game.parryBurst(cx, cy, k);
+            this.game.hitstop(0.1 + k * 0.012);
+            this.game.shake(8 + k * 1.2);
+            this.game.zoomKick(0.035 + k * 0.008);
+            this.game.flash(rgb(255, 235, 180), 0.14 + k * 0.02);
             this.game.sfx.play('PARRY');
-            this.game.fx.text('DEFLECT', p.x, p.y - 42, rgb(255, 215, 90), 18);
-        } else if (d.result === P_BLOCK) this.game.sfx.play('BLOCK');
-        else {
+            const text = p.deflectStreak > 1 ? 'DEFLECT x' + p.deflectStreak : 'DEFLECT';
+            this.game.fx.text(text, p.x, p.y - 42, rgb(255, 215, 90), 16 + k * 3);
+        } else if (d.result === P_BLOCK) {
+            const ang = Number.isFinite(d.sourceX) && Number.isFinite(d.sourceY)
+                ? Math.atan2(d.sourceY - p.y, d.sourceX - p.x) : p.facing;
+            this.game.fx.sparks(p.x + Math.cos(ang) * (p.r + 12), p.y + Math.sin(ang) * (p.r + 12),
+                ang, 1.8, 10, 280, rgb(255, 150, 60));
+            if (d.st === 'STAGGER') {
+                this.game.fx.text('GUARD BROKEN', p.x, p.y - 42, rgb(255, 80, 60), 18);
+                this.game.sfx.play('BREAK');
+                this.game.shake(10);
+            } else {
+                this.game.sfx.play('BLOCK');
+                this.game.shake(3);
+                this.game.hitstop(0.035);
+            }
+        } else {
             p.hurtFlash = 0.3;
             p.invuln = U.clamp(d.invuln, 0, 2);
+            const ang = Number.isFinite(d.sourceX) && Number.isFinite(d.sourceY)
+                ? Math.atan2(d.sourceY - p.y, d.sourceX - p.x) : p.facing;
+            this.game.fx.blood(p.x, p.y, ang + Math.PI, 12, 260);
             this.game.sfx.play('HURT');
             if (Number.isFinite(d.poiseLeft)) p.poiseLeft = U.clamp(Math.min(p.poiseLeft, d.poiseLeft), 0, p.poise * 5);
-            if (d.st === 'ATTACK' || d.st === 'ART') this.game.fx.text('UNFLINCHING', p.x, p.y - 42, rgb(255, 190, 120), 14);
+            if (d.st === 'ATTACK' || d.st === 'ART') {
+                this.game.fx.sparks(p.x + Math.cos(ang) * (p.r + 12), p.y + Math.sin(ang) * (p.r + 12),
+                    ang, 1.2, 10, 300, rgb(255, 170, 90));
+                this.game.fx.ring(p.x, p.y, p.r, p.r + 16, 0.2, 3, rgb(255, 190, 120));
+                this.game.fx.text('UNFLINCHING', p.x, p.y - 42, rgb(255, 190, 120), 14);
+                this.game.shake(5);
+                this.game.hitstop(0.04);
+                this.game.flash(rgb(200, 0, 0), 0.12);
+            } else {
+                this.game.shake(d.perilous ? 14 : 9);
+                this.game.hitstop(0.06);
+                this.game.flash(rgb(200, 0, 0), 0.25);
+            }
         }
         if (d.st === 'DEAD') p.die();
         else if (d.st === 'STAGGER') {
             p.st = 'STAGGER';
-            p.stT = 0;
-            p.staggerDur = 0.4;
+            p.stT = Number.isFinite(d.stT) ? U.clamp(d.stT, 0, 3) : 0;
+            p.staggerDur = Number.isFinite(d.staggerDur) ? U.clamp(d.staggerDur, 0.1, 3) : 0.4;
         }
     }
 
@@ -354,7 +407,7 @@ class Coop {
         if (res === P_HIT) {
             this.game.fx.text(String(Math.trunc(atk.damage * target.dmgTaken)), target.x, target.y - 30, rgb(255, 160, 120), 13);
         }
-        if (target !== this.game.player) this.impact(target, res);
+        if (target !== this.game.player) this.impact(target, res, att.x, att.y);
     }
 
     receiveFriendlyFire(d, c) {
@@ -402,9 +455,52 @@ class Coop {
 
     draw(g) {
         for (const [id, b] of this.bodies) {
-            b.draw(g, this.game.time);
-            g.font = 'bold 13px Georgia, serif';
-            this.game.text(g, 'P' + (id + 1), b.x, b.y - 35, rgb(120, 225, 220), true);
+            this.drawEntity(b, () => {
+                b.draw(g, this.game.time);
+                g.font = 'bold 13px Georgia, serif';
+                this.game.text(g, 'P' + (id + 1), b.x, b.y - 35, rgb(120, 225, 220), true);
+            });
+        }
+    }
+
+    updateRenderPosition(entity) {
+        const now = performance.now(), old = this.renderPositions.get(entity);
+        if (!old) {
+            this.renderPositions.set(entity, {
+                x: entity.x, y: entity.y, facing: entity.facing,
+                fromX: entity.x, fromY: entity.y, fromFacing: entity.facing, started: now,
+            });
+            return;
+        }
+        const t = U.clamp((now - old.started) / (COOP_SYNC_INTERVAL * 1000), 0, 1);
+        const x = U.lerp(old.fromX, old.x, t), y = U.lerp(old.fromY, old.y, t);
+        const facing = old.fromFacing + U.angDiff(old.fromFacing, old.facing) * t;
+        old.fromX = x;
+        old.fromY = y;
+        old.fromFacing = facing;
+        old.x = entity.x;
+        old.y = entity.y;
+        old.facing = entity.facing;
+        old.started = now;
+    }
+
+    drawEntity(entity, draw) {
+        const state = this.renderPositions.get(entity);
+        if (!state) {
+            draw();
+            return;
+        }
+        const t = U.clamp((performance.now() - state.started) / (COOP_SYNC_INTERVAL * 1000), 0, 1);
+        const x = entity.x, y = entity.y, facing = entity.facing;
+        entity.x = U.lerp(state.fromX, state.x, t);
+        entity.y = U.lerp(state.fromY, state.y, t);
+        entity.facing = state.fromFacing + U.angDiff(state.fromFacing, state.facing) * t;
+        try {
+            draw();
+        } finally {
+            entity.x = x;
+            entity.y = y;
+            entity.facing = facing;
         }
     }
 

@@ -4,7 +4,7 @@
  * PeerJS link for online play. A host keeps one connection per guest and relays traffic between them (star topology),
  * so a guest only ever talks to the host. A guest keeps a single connection to the host.
  */
-const NET_VERSION = 8;
+const NET_VERSION = 9;
 const ROOM_PREFIX = 'RONINSPATH-';
 const PING_EVERY_MS = 250;
 

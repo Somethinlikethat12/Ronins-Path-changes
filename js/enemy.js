@@ -651,7 +651,8 @@ class Enemy extends Actor {
             const tol = atk.arc / 2 + Math.asin(Math.min(1, p.r / Math.max(d, 1)));
             if (d <= atk.range + p.r && Math.abs(U.angDiff(this.facing, toP)) <= tol) {
                 const res = p.receive(this.x, this.y, atk.damage * this.dmgScale, atk.posture * this.dmgScale, atk.perilous);
-                if (g.coop && g.coop.host && p !== g.player && res !== P_IGNORE) g.coop.impact(p, res);
+                if (g.coop && g.coop.host && p !== g.player && res !== P_IGNORE)
+                    g.coop.impact(p, res, this.x, this.y, atk.perilous);
                 if (res !== P_IGNORE) this.atkHit = true;
                 if (res === P_DEFLECT) this.onDeflected();
                 else if (res === P_BLOCK) {
