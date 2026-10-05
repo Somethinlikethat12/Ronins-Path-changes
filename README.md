@@ -7,8 +7,10 @@ The actual game:
 https://harpermoor.github.io/Ronins-Path/
 =====================
 I appreciate all feedback. I want this game to be peak and I can't have alla the ideas myself.
-
+=====================
 ## Multiplayer relay
+
+https://ronins-path-relay.onrender.com/
 
 Online rooms use a hosted WebSocket relay instead of PeerJS or direct peer connections. The room's short **port ID** is a relay-side room identifier: every browser makes an outbound connection to the relay, which forwards messages between the host and guests. No router configuration or inbound port forwarding is required. The host browser remains authoritative for the co-op world and duel simulation.
 
