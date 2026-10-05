@@ -314,13 +314,18 @@ const clashEnemyForQte = { x: 100, y: 0, st: 'CLASH' };
 let qteMouseHit = false, qteMouseX = 100, qteMouseY = 400;
 const qteTargets = [{ x: 100, y: 400, r: ng0.radius }, { x: 300, y: 400, r: ng0.radius }, { x: 500, y: 400, r: ng0.radius }];
 const qteGame = Object.assign(Object.create(Game.prototype), {
-    clash: { e: clashEnemyForQte, params: ng0, progress: 0.5, targets: qteTargets, flash: 0, wrongT: 0, ang: 0 },
+    clash: { e: clashEnemyForQte, params: ng0, progress: 0.5, timeLeft: 20, targets: qteTargets, flash: 0, wrongT: 0, ang: 0 },
     player: clashPlayerForQte,
     input: { mouseHit: () => qteMouseHit, mx: qteMouseX, my: qteMouseY },
     canvas: { width: 1000, height: 800 },
-    fx: { sparks() {}, update() {} },
-    sfx: { play() {} },
-    shake() {},
+    fx: { sparks(...args) { this.sparkCalls.push(args); }, ring() { this.ringCount++; }, update() {},
+        sparkCalls: [], ringCount: 0 },
+    sfx: { play(name) { this.lastSound = name; } },
+    hitstop(seconds) { this.lastHitstop = seconds; },
+    parryBurst(x, y, strength) { this.lastParry = [x, y, strength]; },
+    shake(amount) { this.lastShake = amount; },
+    zoomKick(amount) { this.lastZoomKick = amount; },
+    flash(color, amount) { this.lastFlash = amount; },
     shakeAmt: 0,
     zoomKickV: 0,
     flashA: 0,
@@ -328,6 +333,7 @@ const qteGame = Object.assign(Object.create(Game.prototype), {
 qteGame.tickClash(0.5);
 assert.equal(qteGame.clash.targets.length, ng0.targets);
 assert.equal(qteGame.clash.progress, 0.5 - 0.5 * ng0.enemyPush);
+assert.equal(qteGame.clash.timeLeft, 19.5);
 const progressAfterPush = qteGame.clash.progress;
 qteMouseHit = true;
 qteGame.input.mx = qteMouseX;
@@ -335,11 +341,40 @@ qteGame.input.my = qteMouseY;
 qteGame.tickClash(1 / 60);
 assert.equal(qteGame.clash.targets.length, ng0.targets);
 assert.equal(qteGame.clash.progress, progressAfterPush - ng0.enemyPush / 60 + ng0.step);
+assert.equal(qteGame.clash.timeLeft, 19.5 - 1 / 60);
+assert(qteGame.fx.sparkCalls.some(args => args[4] === 24));
+assert(qteGame.fx.ringCount > 0);
+assert.equal(qteGame.sfx.lastSound, 'CLANG');
+assert.equal(qteGame.lastHitstop, 0.045);
+assert.equal(qteGame.lastShake, 6);
+assert(qteGame.lastZoomKick > 0 && qteGame.lastFlash > 0 && qteGame.lastParry[2] > 0);
 qteMouseHit = false;
 const progressAfterHit = qteGame.clash.progress;
 qteGame.tickClash(0.5);
 assert.equal(qteGame.clash.progress, progressAfterHit - 0.5 * ng0.enemyPush);
 assert.equal(qteGame.clash.targets.length, ng0.targets);
+
+const timeoutText = [];
+const timeoutPlayer = { st: 'CLASH', posture: 0, maxPosture: 100, invuln: 1,
+    toFree() { this.st = 'FREE'; }, receive() {} };
+const timeoutEnemy = { st: 'CLASH', dmgScale: 1, posture: 0, maxPosture: 100,
+    setSt(state) { this.st = state; } };
+const timeoutGame = Object.assign(Object.create(Game.prototype), {
+    clash: { e: timeoutEnemy, params: Object.assign({}, ng0, { enemyPush: 0 }), progress: 0.5,
+        timeLeft: 1 / 60, targets: [], flash: 0, wrongT: 0, ang: 0 },
+    player: timeoutPlayer,
+    input: { mouseHit: () => false, mx: 0, my: 0 },
+    canvas: { width: 1000, height: 800 },
+    fx: { sparks() {}, ring() {}, update() {}, text(label) { timeoutText.push(label); } },
+    sfx: { play() {} },
+    shake() {}, hitstop() {}, slowmo() {}, flash() {}, parryBurst() {},
+    shakeAmt: 0, zoomKickV: 0, flashA: 0, time: 0,
+});
+timeoutGame.tickClash(1 / 60);
+assert.equal(timeoutGame.clash, null);
+assert.equal(timeoutPlayer.st, 'FREE');
+assert.equal(timeoutEnemy.st, 'ENGAGE');
+assert(timeoutText.includes('TIME EXPIRED'));
 const clashPlayer = Object.assign({}, attacker, { st: 'ATTACK', facing: 0 });
 const clashGame = Object.assign(Object.create(combatGame), { player: clashPlayer, coop: null, clash: null,
     clashes: 0, startClash(e) { this.clashes++; this.clash = { e }; e.setSt('CLASH'); } });

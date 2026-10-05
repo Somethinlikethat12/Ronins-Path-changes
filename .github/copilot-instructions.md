@@ -17,4 +17,22 @@ Online play has two paths. `js/net.js` wraps WebSocket connections to the Node r
 
 ## Build, test, and lint
 
-The browser game has no build step. `npm start` runs the Node HTTP/WebSocket relay and serves the game; `npm test` runs gameplay tests and WebSocket relay integration checks. Run the automated checks from the repository root after installing dependencies with `npm install`. Syntax-check browser JavaScript with `node --check js/<file>.js`. Test fixtures are partial `Game` stand-ins, so guard new `Game` hooks called from `Enemy` or `Player` code (for example, `typeof g.startClash === 'function'`).
+The browser game has no build step or configured lint script. Use Node.js 20 or later and run commands from the repository root:
+
+```sh
+npm install
+npm start
+npm test
+```
+
+`npm start` serves the game and WebSocket relay at `http://localhost:3000` (the server also accepts `HOST` and `PORT` environment variables). `npm test` runs these checks in sequence:
+
+```sh
+node tests/enemies.test.js
+node tests/weapons.test.js
+node tests/relay.test.js
+```
+
+Run one of those commands to target a single test file. Syntax-check an individual browser script with `node --check js/<file>.js`. Test fixtures are partial `Game` stand-ins, so guard new `Game` hooks called from `Enemy` or `Player` code (for example, `typeof g.startClash === 'function'`).
+
+For browser-level exploration, `.vscode/mcp.json` configures the Playwright MCP server. Start the local game with `npm start` and browse to `http://localhost:3000`.

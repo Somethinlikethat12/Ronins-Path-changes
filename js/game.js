@@ -16,6 +16,7 @@ const BIG_KANJI = 'bold 150px ' + KANJI_FAMILY;
 // Living enemies inside this radius of a shrine prevent resting; aware enemies hunting the player block from further out.
 const REST_SAFE_R = 480;
 const REST_HUNT_R = 900;
+const CLASH_TIME_LIMIT = 20;
 
 /** Sword-clash tuning: NG+ requires more clicks, offers more targets, and shrinks them. */
 function clashParams(ngPlus) {
@@ -242,7 +243,7 @@ class Game {
     startClash(e, p) {
         const ang = Math.atan2(e.y - p.y, e.x - p.x);
         const params = clashParams(this.ngPlus);
-        this.clash = { e, params, progress: 0.5, t: 0, targets: [], flash: 0, wrongT: 0, ang };
+        this.clash = { e, params, progress: 0.5, timeLeft: CLASH_TIME_LIMIT, targets: [], flash: 0, wrongT: 0, ang };
         while (this.clash.targets.length < params.targets) this.clash.targets.push(this.spawnClashTarget());
         p.st = 'CLASH';
         p.stT = 0;
@@ -286,7 +287,9 @@ class Game {
         }
         c.flash -= dt;
         c.wrongT -= dt;
+        c.timeLeft -= dt;
         this.shakeAmt *= Math.exp(-dt * 9);
+        this.parryT = Math.max(0, this.parryT - dt);
         this.zoomKickV *= Math.exp(-dt * 5);
         this.flashA = Math.max(0, this.flashA - dt * 2.5);
         let right = false, wrong = false;
@@ -303,9 +306,14 @@ class Game {
         if (right) {
             c.progress += P.step;
             c.flash = 0.12;
-            this.fx.sparks(mx, my, c.ang + Math.PI / 2, TAU, 10, 420, rgb(255, 215, 120));
-            this.sfx.play('BLOCK');
-            this.shake(3);
+            this.fx.sparks(mx, my, c.ang + Math.PI / 2, TAU, 24, 520, rgb(255, 215, 120));
+            this.fx.ring(mx, my, 8, 76, 0.28, 4, rgb(255, 235, 180));
+            this.sfx.play('CLANG');
+            this.parryBurst(mx, my, 2.5);
+            this.hitstop(0.045);
+            this.shake(6);
+            this.zoomKick(0.035);
+            this.flash(rgb(255, 235, 180), 0.1);
         } else if (wrong) {
             c.progress -= P.penalty;
             c.wrongT = 0.3;
@@ -316,9 +324,10 @@ class Game {
         this.fx.update(dt);
         if (c.progress >= 1) this.endClash(true);
         else if (c.progress <= 0) this.endClash(false);
+        else if (c.timeLeft <= 0) this.endClash(false, true);
     }
 
-    endClash(won) {
+    endClash(won, timedOut) {
         const c = this.clash, e = c.e, p = this.player, ang = c.ang;
         this.clash = null;
         p.toFree();
@@ -345,7 +354,7 @@ class Game {
                 this.fx.text('OPENING', e.x, e.y - 40, rgb(255, 235, 170), 15);
             }
         } else {
-            this.fx.text('OVERPOWERED', p.x, p.y - 60, rgb(220, 110, 255), 20);
+            this.fx.text(timedOut ? 'TIME EXPIRED' : 'OVERPOWERED', p.x, p.y - 60, rgb(220, 110, 255), 20);
             this.sfx.play('HEAVY');
             e.setSt('ENGAGE');
             e.attackCd = 0;
@@ -369,6 +378,9 @@ class Game {
         g.font = SMALL_FONT;
         this.text(g, 'Click fast to push back - the enemy is steadily gaining ground'
             + (this.ngPlus > 0 ? '   (NG+' + this.ngPlus + ')' : ''), cx, cy - 22, rgb(220, 210, 195), true);
+        g.font = 'bold 16px sans-serif';
+        this.text(g, Math.max(0, c.timeLeft).toFixed(1) + 's', cx, cy + 38,
+            c.timeLeft <= 5 ? rgb(255, 100, 80) : rgb(255, 225, 140), true);
         const x0 = cx - W / 2, split = x0 + W * U.clamp(c.progress, 0, 1);
         g.fillStyle = 'rgb(255,200,90)';
         g.fillRect(x0, cy - H / 2, split - x0, H);
