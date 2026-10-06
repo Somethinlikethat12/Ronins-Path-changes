@@ -57,6 +57,7 @@ class Game {
         this.hitstopT = 0;
         this.slowmoT = 0;
         this.flashA = 0;
+        this.impactFrameT = 0;
         this.hpGhost = 100;
         this.flashColor = WHITE;
         this.paused = false;
@@ -436,6 +437,10 @@ class Game {
         this.flashA = Math.max(this.flashA, a);
     }
 
+    impactFrames(t) {
+        this.impactFrameT = Math.max(this.impactFrameT || 0, t);
+    }
+
     banner(big, small, c) {
         this.bannerBig = big;
         this.bannerSmall = small;
@@ -579,9 +584,11 @@ class Game {
 
         if (this.hitstopT > 0) {
             this.hitstopT -= dt;
+            if (this.impactFrameT > 0) this.impactFrameT -= dt;
             if (this.coop) this.coop.tick(dt);
             return;
         }
+        if (this.impactFrameT > 0) this.impactFrameT -= dt;
         if ((this.autosaveT -= dt) <= 0 && player.st !== 'DEAD') this.saveNow(false);
         if (this.slowmoT > 0) {
             this.slowmoT -= dt;
@@ -932,6 +939,7 @@ class Game {
         this.shake(11);
         this.slowmo(0.35);
         this.flash(rgb(180, 230, 255), 0.2);
+        this.impactFrames(0.12);
         if (e.posture >= e.maxPosture) e.breakPosture();
     }
 
@@ -1114,6 +1122,14 @@ class Game {
         if (this.flashA > 0) {
             g.fillStyle = css(U.alpha(this.flashColor, this.flashA * 0.6));
             g.fillRect(0, 0, sw, sh);
+        }
+        if (this.impactFrameT > 0) {
+            if (Math.floor(this.impactFrameT * 30) % 2 === 0) {
+                g.fillStyle = '#fff';
+                g.globalCompositeOperation = 'difference';
+                g.fillRect(0, 0, sw, sh);
+                g.globalCompositeOperation = 'source-over';
+            }
         }
         this.drawHud(g, sw, sh, db);
         if (this.coop) this.coop.drawStatus(g, sw);

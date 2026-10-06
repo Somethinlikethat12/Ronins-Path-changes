@@ -770,6 +770,7 @@ class Enemy extends Actor {
         g.hitstop(pa.art ? 0.11 : pa.heavy ? 0.075 : 0.045);
         g.shake(pa.art ? 8 : pa.heavy ? 5 : 3.5);
         if (pa.art) g.fx.sparks(cx, cy, ang, 1.4, 16, 460, rgb(255, 230, 170));
+        if (pa.name === 'dragonflash') g.impactFrames(0.12);
         g.fx.text(String(Math.trunc(dmg)), this.x + this.rnd.nextGaussian() * 6, this.y - 30, WHITE, 13);
         p.ki += 4;
         if (this.hp <= 0) {

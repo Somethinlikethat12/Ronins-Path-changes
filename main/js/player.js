@@ -1,7 +1,7 @@
 'use strict';
 
 const P_IGNORE = 0, P_DEFLECT = 1, P_BLOCK = 2, P_HIT = 3;
-const PERFECT_WINDOW = 0.18, DODGE_TIME = 0.34, DODGE_IFRAMES = 0.25;
+const PERFECT_WINDOW = 0.18, DODGE_TIME = 0.34, DODGE_IFRAMES = 0.34;
 const HEAVY_STAB_HOLD = 0.36;
 const P_COMBO = [
     new Attack('cut1', 0.08, 0.09, 0.20, 84, 150, 14, 12, 190),
@@ -768,6 +768,7 @@ class Player extends Actor {
                 g.zoomKick(0.035 + k * 0.008);
                 g.flash(rgb(255, 235, 180), 0.14 + k * 0.02);
                 g.parryBurst(cx, cy, k);
+                g.impactFrames(0.06 + k * 0.015);
                 const s = this.deflectStreak > 1 ? 'DEFLECT x' + this.deflectStreak : 'DEFLECT';
                 g.fx.text(s, this.x, this.y - 42, this.deflectStreak >= 4 ? rgb(255, 250, 200) : rgb(255, 215, 90), 16 + k * 3);
                 return P_DEFLECT;

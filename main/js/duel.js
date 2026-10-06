@@ -75,6 +75,7 @@ class DuelSide {
     shake(a) { this.duel.shake(a); }
     zoomKick(z) { this.duel.zoomKick(z); }
     flash(c, a) { this.duel.flash(c, this.idx === this.duel.localIdx ? a : a * 0.4); }
+    impactFrames(t) { this.duel.impactFrames(t); }
     parryBurst(x, y, k) { this.duel.parryBurst(x, y, k); }
 
     deathblowTarget() { return this.duel.deathblowTarget(this.self); }
@@ -179,6 +180,7 @@ class Duel {
         this.shakeAmt = 0;
         this.zoomKickV = 0;
         this.flashA = 0;
+        this.impactFrameT = 0;
         this.flashColor = WHITE;
         this.parryT = 0;
         this.parryX = 0;
@@ -658,6 +660,10 @@ class Duel {
         this.flashA = Math.max(this.flashA, a);
     }
 
+    impactFrames(t) {
+        if (!this.muted) this.impactFrameT = Math.max(this.impactFrameT || 0, t);
+    }
+
     parryBurst(x, y, k) {
         if (this.muted) return;
         this.parryT = 0.2;
@@ -693,6 +699,7 @@ class Duel {
         p.hitSet.add(foe);
         if (res === P_DEFLECT) this.onDeflected(p, foe, atk);
         else if (res === P_HIT) {
+            if (atk.name === 'dragonflash') this.impactFrames(0.12);
             p.ki = Math.min(100, p.ki + 4);
             this.fx.text(String(Math.trunc(foe.lastDmgTaken)), foe.x, foe.y - 30, WHITE, 13);
             if (foe.st !== 'DEAD' && foe.posture >= foe.maxPosture) this.breakPosture(foe);
@@ -713,11 +720,12 @@ class Duel {
         p.gainArtCharge();
         this.fx.sparks((p.x + foe.x) / 2, (p.y + foe.y) / 2, a + Math.PI, 3, 40, 600, rgb(140, 220, 255));
         this.fx.text('MIKIRI COUNTER', p.x, p.y - 48, rgb(140, 220, 255), 20);
-        this.sfx.play('CLANG');
+       this.sfx.play('CLANG');
         this.hitstop(0.12);
         this.shake(11);
         this.slowmo(0.35);
         this.flash(rgb(180, 230, 255), 0.2);
+        this.impactFrames(0.12);
         if (foe.posture >= foe.maxPosture) this.breakPosture(foe);
     }
 
@@ -896,6 +904,7 @@ class Duel {
         this.parryT -= el;
         this.zoomKickV *= Math.exp(-el * 5);
         this.flashA = Math.max(0, this.flashA - el * 2.5);
+        if (this.impactFrameT > 0) this.impactFrameT -= el;
         for (let i = 0; i < this.n; i++) {
             const q = this.players[i];
             this.hpGhost[i] = this.hpGhost[i] > q.hp ? Math.max(q.hp, this.hpGhost[i] - el * 40) : q.hp;
@@ -934,10 +943,18 @@ class Duel {
         g.restore();
 
         this.drawParryBurst(g, sw, sh, z);
-        this.drawVignette(g, sw, sh);
+       this.drawVignette(g, sw, sh);
         if (this.flashA > 0) {
             g.fillStyle = css(U.alpha(this.flashColor, this.flashA * 0.6));
             g.fillRect(0, 0, sw, sh);
+        }
+        if (this.impactFrameT > 0) {
+            if (Math.floor(this.impactFrameT * 30) % 2 === 0) {
+                g.fillStyle = '#fff';
+                g.globalCompositeOperation = 'difference';
+                g.fillRect(0, 0, sw, sh);
+                g.globalCompositeOperation = 'source-over';
+            }
         }
         this.drawHud(g, sw, sh);
     }
