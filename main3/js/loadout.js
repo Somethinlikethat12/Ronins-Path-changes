@@ -61,6 +61,14 @@ const ARTS = [
         hits: [{ t: 0.48, atk: artAtk('earthshaker', 118, 205, 66, 112) }],
         blade: t => (t < 0.48 ? U.lerp(2.9, -2.2, t / 0.48) : U.lerp(-2.2, 0.15, U.clamp((t - 0.48) / 0.08, 0, 1))),
     },
+    {
+        id: 'moon-arc', name: 'Moon Arc', kanji: '月弧', cost: 2, unlock: 4, weaponId: 'moonlit-edge',
+        color: rgb(150, 205, 255), motion: 'wave', trail: true,
+        desc: 'Send a crescent of pale light cutting down a distant foe.', info: 'Long-range cutting wave  -  Moonlit Edge only',
+        dur: 0.78,
+        hits: [{ t: 0.32, atk: artAtk('moon-arc', 238, 38, 48, 36, true), line: true }],
+        blade: t => (t < 0.32 ? U.lerp(1.9, 2.8, t / 0.32) : U.lerp(2.8, -1.0, U.clamp((t - 0.32) / 0.09, 0, 1))),
+    },
 ];
 
 const SWORDS = [
@@ -76,6 +84,15 @@ const SWORDS = [
     { id: 'sorrow', type: 'katana', name: 'Blade of Sorrow', kanji: '哀刃', unlock: 4, dmg: 1.35, post: 1.5, spd: 1.05, reach: 6, len: 62, color: rgb(210, 70, 80),
         scaling: { arcane: 'S', dexterity: 'C' }, status: { type: 'poison', val: 55 },
         desc: 'A cursed edge that shatters any guard.', info: 'Poison (55)  -  Arc S, Dex C' },
+    { id: 'bloodwake', type: 'katana', name: 'Bloodwake Blade', kanji: '血潮', unlock: 3, dmg: 1.02, post: 0.92, spd: 0.78, reach: 0, len: 60, color: rgb(205, 85, 95),
+        scaling: { dexterity: 'A', arcane: 'C' }, status: { type: 'bleed', val: 54 },
+        combo: [new Attack('bloodwake1', 0.07, 0.08, 0.18, 84, 142, 12, 10, 205),
+            new Attack('bloodwake2', 0.06, 0.08, 0.18, 86, 150, 12, 10, 220),
+            new Attack('bloodwake3', 0.11, 0.10, 0.28, 96, 190, 20, 18, 275)],
+        desc: 'A quick red-edged blade that builds a severe bleed in rapid cuts.', info: 'Bleed (54)  -  Dex A, Arc C' },
+    { id: 'moonlit-edge', type: 'katana', name: 'Moonlit Edge', kanji: '月影', unlock: 4, dmg: 1.08, post: 1.05, spd: 1.02, reach: 8, len: 64, color: rgb(155, 200, 245),
+        scaling: { dexterity: 'B', intelligence: 'A' },
+        desc: 'A cool blue blade whose trained wielder can loose a cutting wave.', info: 'Dex B, Int A  -  unique art' },
     { id: 'spear', type: 'spear', name: 'Ash Spear', kanji: '槍', unlock: 0, dmg: 0.85, post: 0.85, spd: 1.08, reach: 38, len: 76, color: rgb(205, 220, 225),
         scaling: { strength: 'D', dexterity: 'C' },
         combo: [new Attack('spear1', 0.12, 0.10, 0.25, 112, 42, 15, 12, 150),
@@ -112,6 +129,12 @@ const SWORDS = [
             new Attack('stoneHammer2', 0.24, 0.13, 0.4, 78, 165, 20, 25, 105),
             new Attack('stoneHammer3', 0.34, 0.16, 0.6, 92, 205, 32, 39, 155)],
         desc: 'A stone-headed maul with devastating but deliberate swings.', info: 'Str S, Fth D' },
+    { id: 'colossus-maul', type: 'hammer', name: 'Colossus Maul', kanji: '巨鎚', unlock: 4, poise: 52, dmg: 1.72, post: 2.25, spd: 2.05, reach: -22, len: 86, color: rgb(180, 170, 150),
+        scaling: { strength: 'S' },
+        combo: [new Attack('colossus1', 0.30, 0.15, 0.5, 82, 172, 26, 32, 95),
+            new Attack('colossus2', 0.32, 0.15, 0.52, 82, 180, 28, 35, 90),
+            new Attack('colossus3', 0.48, 0.20, 0.72, 102, 225, 42, 58, 130)],
+        desc: 'An enormous iron maul. Slow to lift, but every blow buckles a guard.', info: 'Str S  -  exceptional poise' },
     { id: 'axe', type: 'axe', name: 'Woodsman Axe', kanji: '斧', unlock: 0, poise: 16, dmg: 1.18, post: 1.3, spd: 1.22, reach: -3, len: 52, color: rgb(205, 200, 190),
         scaling: { strength: 'B', dexterity: 'D' },
         combo: [new Attack('axe1', 0.14, 0.11, 0.28, 84, 180, 17, 15, 170),
@@ -188,7 +211,12 @@ const LOOKS = [
 
 function findItem(list, id) { return list.find(i => i.id === id) || list[0]; }
 function weaponType(weapon) { return weapon.type || 'katana'; }
-function artMatchesWeapon(art, weapon) { return !art.weapon || art.weapon === weaponType(weapon); }
+function artMatchesWeapon(art, weapon) {
+    return (!art.weapon || art.weapon === weaponType(weapon)) && (!art.weaponId || art.weaponId === weapon.id);
+}
+function artRequirementName(art) {
+    return art.weaponId ? 'the ' + findItem(SWORDS, art.weaponId).name : 'a ' + weaponTypeName(art.weapon);
+}
 function armorFitsWeapon(armor, weapon) { return !!armor.affinity && armor.affinity === weaponType(weapon); }
 function weaponTypeName(type) { return WEAPON_TYPES.find(t => t.id === type).name; }
 
@@ -243,6 +271,9 @@ class Loadout {
         for (const s of EQUIP_SLOTS) {
             const it = s.list.find(i => i.id === d[s.field]);
             if (it && it.unlock <= elites) this[s.field] = it.id;
+        }
+        if (!artMatchesWeapon(this.artDef(), this.swordDef())) {
+            this.art = ARTS.find(a => a.weaponId === this.sword)?.id || ARTS[0].id;
         }
         if (d.look && typeof d.look === 'object') {
             for (const l of LOOKS) {
@@ -551,7 +582,7 @@ class EquipMenu {
             return;
         }
         if (slot.field === 'art' && !artMatchesWeapon(it, g.loadout.swordDef())) {
-            this.note(it.name + ' requires a ' + weaponTypeName(it.weapon));
+            this.note(it.name + ' requires ' + artRequirementName(it));
             g.sfx.play('BLOCK');
             return;
         }
@@ -559,7 +590,7 @@ class EquipMenu {
         g.loadout[slot.field] = it.id;
         let artReset = false;
         if (slot.field === 'sword' && !artMatchesWeapon(g.loadout.artDef(), it)) {
-            g.loadout.art = ARTS[0].id;
+            g.loadout.art = ARTS.find(a => a.weaponId === it.id)?.id || ARTS[0].id;
             artReset = true;
         }
         g.player.applyLoadout();
@@ -775,7 +806,7 @@ class EquipMenu {
             game.text(g, it.info, x + 84, ry + 62, U.alpha(rgb(140, 210, 200), dim), false);
             g.font = 'bold 13px sans-serif';
             if (!this.unlocked(it)) this.rightText(g, 'Slay ' + it.unlock + ' elite' + (it.unlock > 1 ? 's' : ''), x + w - 12, ry + 24, rgb(200, 120, 110));
-            else if (weaponLocked) this.rightText(g, 'Requires ' + weaponTypeName(it.weapon), x + w - 12, ry + 24, rgb(220, 160, 110));
+            else if (weaponLocked) this.rightText(g, 'Requires ' + artRequirementName(it), x + w - 12, ry + 24, rgb(220, 160, 110));
             else if (slot.field === 'armor' && it.affinity) {
                 const fits = armorFitsWeapon(it, lo.swordDef());
                 const tag = fits ? WEAPON_TYPES.find(t => t.id === it.affinity).label.replace(/s$/, '') + ' bonus active' : 'Best with a ' + weaponTypeName(it.affinity);

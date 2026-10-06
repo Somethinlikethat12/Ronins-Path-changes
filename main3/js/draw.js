@@ -163,8 +163,8 @@ const Draw = {
         setStroke(g, 7, true);
         g.strokeStyle = 'rgb(60,44,34)';
         strokeLine(g, hx, hy, cx, cy);
-        const along = id === 'stone-hammer' ? 11 : id === 'war-hammer' ? 10 : 8;
-        const across = id === 'stone-hammer' ? 18 : id === 'war-hammer' ? 17 : 15;
+        const along = id === 'colossus-maul' ? 14 : id === 'stone-hammer' ? 11 : id === 'war-hammer' ? 10 : 8;
+        const across = id === 'colossus-maul' ? 25 : id === 'stone-hammer' ? 18 : id === 'war-hammer' ? 17 : 15;
         g.beginPath();
         g.moveTo(cx - c * along - s * across, cy - s * along + c * across);
         g.lineTo(cx + c * along - s * across, cy + s * along + c * across);

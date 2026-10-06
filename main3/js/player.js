@@ -527,7 +527,7 @@ class Player extends Actor {
     tryArt(aimAng) {
         const g = this.g, a = this.art;
         if (!artMatchesWeapon(a, this.sword)) {
-            g.fx.text(a.name + ' requires the ' + findItem(SWORDS, a.weapon).name, this.x, this.y - 40, rgb(255, 190, 115), 13);
+            g.fx.text(a.name + ' requires ' + artRequirementName(a), this.x, this.y - 40, rgb(255, 190, 115), 13);
             g.sfx.play('BLOCK');
             return;
         }

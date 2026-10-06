@@ -50,6 +50,34 @@ for (const id of ['storm-spear', 'serpent-spear', 'war-hammer', 'stone-hammer'])
     assert.equal(p.sword.id, id);
     assert.equal(p.comboAtk.length, 3);
 }
+const colossus = vm.runInContext('findItem(SWORDS, "colossus-maul")', context);
+const bloodwake = vm.runInContext('findItem(SWORDS, "bloodwake")', context);
+const moonlitEdge = vm.runInContext('findItem(SWORDS, "moonlit-edge")', context);
+assert.equal(colossus.type, 'hammer');
+assert(colossus.poise > vm.runInContext('findItem(SWORDS, "stone-hammer")', context).poise);
+assert(colossus.combo[2].damage > vm.runInContext('findItem(SWORDS, "stone-hammer")', context).combo[2].damage);
+assert.equal(bloodwake.status.type, 'bleed');
+assert(bloodwake.combo[0].windup < vm.runInContext('P_COMBO[0].windup', context));
+assert.equal(moonlitEdge.scaling.intelligence, 'A');
+const moonArc = vm.runInContext('findItem(ARTS, "moon-arc")', context);
+const matchesNewWeapon = vm.runInContext('artMatchesWeapon', context);
+assert(matchesNewWeapon(moonArc, moonlitEdge));
+assert(!matchesNewWeapon(moonArc, vm.runInContext('findItem(SWORDS, "wanderer")', context)));
+const restoredLoadout = new (vm.runInContext('Loadout', context))();
+restoredLoadout.apply({ sword: 'moonlit-edge', art: 'spearfall' }, 4);
+assert.equal(restoredLoadout.art, 'moon-arc');
+lo.sword = moonlitEdge.id;
+lo.art = moonArc.id;
+p.applyLoadout();
+p.artCharges = 3;
+p.tryArt(0);
+assert.equal(p.st, 'ART');
+fxEvents.length = 0;
+p.stT = moonArc.hits[0].t;
+p.artUpdate(0, 0);
+assert(fxEvents.some(e => e.name === 'line'));
+assert(p.artAtk.pierce);
+p.toFree();
 const weaponMenu = new (vm.runInContext('EquipMenu', context))(g);
 weaponMenu.tab = 1;
 weaponMenu.selectWeaponType(2);
@@ -58,6 +86,10 @@ assert(weaponMenu.tabIndices().some(i => vm.runInContext('SWORDS[' + i + '].id',
 weaponMenu.selectWeaponType(3);
 assert(weaponMenu.tabIndices().every(i => vm.runInContext('weaponType(SWORDS[' + i + '])', context) === 'hammer'));
 assert(weaponMenu.tabIndices().some(i => vm.runInContext('SWORDS[' + i + '].id', context) === 'stone-hammer'));
+assert(weaponMenu.tabIndices().some(i => vm.runInContext('SWORDS[' + i + '].id', context) === 'colossus-maul'));
+weaponMenu.selectWeaponType(1);
+assert(weaponMenu.tabIndices().some(i => vm.runInContext('SWORDS[' + i + '].id', context) === 'bloodwake'));
+assert(weaponMenu.tabIndices().some(i => vm.runInContext('SWORDS[' + i + '].id', context) === 'moonlit-edge'));
 for (const id of ['hammer', 'war-hammer', 'stone-hammer', 'axe']) {
     lo.sword = id;
     p.applyLoadout();
@@ -281,6 +313,9 @@ Coop.syncGear(remote, { sword: 'invalid', throwable: 'invalid', charm: 'invalid'
 assert.equal(remote.sword.id, 'hammer');
 assert.equal(remote.g.loadout.charm, 'ironheart');
 assert.equal(Coop.playerData(remote).art, 'whirlwind');
+Coop.syncGear(remote, { sword: 'moonlit-edge', art: 'moon-arc' });
+assert.equal(remote.sword.id, 'moonlit-edge');
+assert.equal(remote.art.id, 'moon-arc');
 
 const SaveGame = vm.runInContext('SaveGame', context);
 Object.assign(g, { seed: 123, kills: 0, elitesSlain: 0, ngPlus: 0, bossSpawned: false,
