@@ -85,9 +85,14 @@ class Game {
         this.menu = new EquipMenu(this);
         this.skills = new Set();
         this.exp = 0;
-        this.pointsEarned = 0;
+       this.pointsEarned = 0;
         this.skillPoints = 0;
         this.lastExpLoss = 0;
+        this.lastRuneLoss = 0;
+        const defaultStats = { vigor: 10, mind: 10, endurance: 10, strength: 10, dexterity: 10, intelligence: 10, faith: 10, arcane: 10 };
+        this.stats = save && save.stats ? save.stats : Object.assign({}, defaultStats);
+        this.level = save && save.level ? save.level : 1;
+        this.runes = save && save.runes ? save.runes : 0;
         this.parryT = 0;
         this.parryX = 0;
         this.parryY = 0;
@@ -418,6 +423,11 @@ class Game {
     gainExp(n, x, y) {
         this.exp += n;
         this.fx.text('+' + n + ' EXP', x, y - 20, rgb(140, 225, 205), 13);
+    }
+
+    gainRunes(n, x, y) {
+        this.runes += n;
+        this.fx.text('+' + n + ' Runes', x, y - 35, rgb(210, 190, 140), 13);
         let need = expForNextPoint(this.pointsEarned);
         while (this.exp >= need) {
             this.exp -= need;
@@ -574,7 +584,11 @@ class Game {
         const wx = (inp.mx - sw / 2) / z + this.camX, wy = (inp.my - sh / 2) / z + this.camY;
         player.readInput(inp, wx, wy);
         if (inp.hit('KeyE')) this.interact();
-
+         // TEST CHEAT: Press 'C' to instantly gain 1000 EXP and 10000 Runes
+        if (inp.hit('KeyC')) {
+            this.gainExp(1000, player.x, player.y);
+            this.gainRunes(10000, player.x, player.y);
+        }
         this.shakeAmt *= Math.exp(-dt * 9);
         this.parryT -= dt;
         this.zoomKickV *= Math.exp(-dt * 5);
@@ -884,7 +898,7 @@ class Game {
 
     mikiriCandidate(p, dx, dy) {
         for (const e of this.enemies) {
-            if (e.atk === null || !e.atk.perilous || !e.atk.thrust) continue;
+            if (e.atk === null || !e.atk.perilous) continue;
             const timing = (e.st === 'WINDUP' && e.stDur - e.stT < 0.32) || e.st === 'ACTIVE';
             if (!timing) continue;
             const d = p.distTo(e);
@@ -894,7 +908,7 @@ class Game {
         }
         if (this.coop !== null && this.coop.settings.friendlyFire) {
             for (const e of this.coop.party) {
-                if (e.st !== 'ATTACK' || !e.cur || !e.cur.perilous || !e.cur.thrust) continue;
+                if (e.st !== 'ATTACK' || !e.cur || !e.cur.perilous ) continue;
                 const timing = (e.phase === 0 && e.cur.windup - e.stT < 0.32) || e.phase === 1;
                 if (!timing || p.distTo(e) > e.cur.range + 80) continue;
                 const a = p.angleTo(e);
@@ -1017,11 +1031,14 @@ class Game {
         }
     }
 
-    onEnemyKilled(e) {
+   onEnemyKilled(e) {
         const player = this.player;
         this.kills++;
         player.ki = Math.min(100, player.ki + 10);
         this.gainExp(expForKill(e), e.x, e.y);
+        let baseR = e.type === 'RONIN' ? 10 : e.type === 'SPEAR' ? 15 : e.type === 'BRUTE' ? 30 : 10;
+        let mult = e.boss ? 40 : e.elite ? 20 : 1;
+        this.gainRunes(baseR * mult, e.x, e.y);
         if (e.boss) {
             this.bossDefeated = true;
             this.boss = null;
@@ -1069,6 +1086,8 @@ class Game {
         // as in Sekiro, death costs half of the EXP not yet turned into a skill point
         this.lastExpLoss = Math.floor(this.exp / 2);
         this.exp -= this.lastExpLoss;
+        this.lastRuneLoss = this.runes;
+        this.runes = 0;
         for (const e of this.enemies) e.releaseToken();
     }
 
@@ -1334,6 +1353,7 @@ class Game {
         g.fillStyle = 'rgb(120,210,190)';
         g.fillRect(26, 90, Math.trunc(200 * U.clamp(this.exp / need, 0, 1)), 3);
         this.text(g, 'EXP ' + Math.floor(this.exp) + '/' + need, 24, 112, rgb(160, 220, 205), false);
+        this.text(g, 'Runes: ' + this.runes, 24, 130, rgb(210, 190, 140), false);
         if (this.skillPoints > 0) {
             g.font = 'bold 13px sans-serif';
             this.text(g, this.skillPoints + ' skill point' + (this.skillPoints > 1 ? 's' : '') + ' [Tab]', 130, 112,
@@ -1373,10 +1393,10 @@ class Game {
             if (p.deadT > 1.2) {
                 g.font = SUB_FONT;
                 this.text(g, 'Press E to resurrect at ' + this.lastShrine.name, sw / 2, sh / 2 + 140, rgb(230, 220, 210), true);
-                if (this.lastExpLoss > 0) {
-                    g.font = HUD_FONT;
-                    this.text(g, 'Lost ' + this.lastExpLoss + ' EXP', sw / 2, sh / 2 + 168, rgb(200, 140, 140), true);
-                }
+                if (this.lastExpLoss > 0 || this.lastRuneLoss > 0) {
+                g.font = HUD_FONT;
+                this.text(g, 'Lost ' + this.lastExpLoss + ' EXP and ' + this.lastRuneLoss + ' Runes', sw / 2, sh / 2 + 168, rgb(200, 140, 140), true);
+            }
             }
         }
 
@@ -1529,7 +1549,23 @@ class Game {
         g.fillRect(bx - 2, by - 2, bw + 4, 14);
         g.fillStyle = 'rgb(170,30,40)';
         g.fillRect(bx, by, Math.trunc(bw * U.clamp(e.hp / e.maxHp, 0, 1)), 10);
-        Draw.postureBar(g, sw / 2, by + 16, bw, 6, e.posture / e.maxPosture, e.st === 'BROKEN');
+       Draw.postureBar(g, sw / 2, by + 16, bw, 6, e.posture / e.maxPosture, e.st === 'BROKEN');
+        let barY = by + 26;
+        if (e.bleed > 0) {
+            g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(bx, barY, bw, 4);
+            g.fillStyle = 'rgb(200,20,20)'; g.fillRect(bx, barY, bw * (e.bleed/100), 4);
+            barY += 6;
+        }
+        if (e.frost > 0) {
+            g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(bx, barY, bw, 4);
+            g.fillStyle = 'rgb(150,200,255)'; g.fillRect(bx, barY, bw * (e.frost/100), 4);
+            barY += 6;
+        }
+        if (e.poison > 0) {
+            g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(bx, barY, bw, 4);
+            g.fillStyle = 'rgb(100,200,100)'; g.fillRect(bx, barY, bw * (e.poison/100), 4);
+            barY += 6;
+        }
     }
 
     drawMinimap(g, sw, sh) {

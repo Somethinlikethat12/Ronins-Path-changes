@@ -146,6 +146,35 @@ class Actor {
         this.posture = 0;
         this.maxPosture = 0;
         this.alive = true;
+        this.bleed = 0;
+        this.poison = 0;
+        this.frost = 0;
+        this.poisonT = 0;
+        this.frostT = 0;
+    }
+    updateStatuses(dt) {
+        this.bleed = Math.max(0, this.bleed - dt * 5);
+        if (this.poisonT <= 0) this.poison = Math.max(0, this.poison - dt * 5);
+        if (this.frostT <= 0) this.frost = Math.max(0, this.frost - dt * 5);
+
+        if (this.poisonT > 0) {
+            this.poisonT -= dt;
+            this.hp -= this.maxHp * 0.015 * dt;
+        }
+        if (this.frostT > 0) this.frostT -= dt;
+    }
+    applyStatus(type, val) {
+        if (type === 'bleed') {
+            this.bleed += val;
+            if (this.bleed >= 100) { this.bleed = 0; return 'bleed'; }
+        } else if (type === 'poison') {
+            if (this.poisonT <= 0) this.poison += val;
+            if (this.poison >= 100) { this.poison = 0; this.poisonT = 30; return 'poison'; }
+        } else if (type === 'frost') {
+            if (this.frostT <= 0) this.frost += val;
+            if (this.frost >= 100) { this.frost = 0; this.frostT = 30; return 'frost'; }
+        }
+        return null;
     }
     move(w, dx, dy) {
         this.x += dx;

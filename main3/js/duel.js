@@ -94,7 +94,7 @@ class DuelSide {
     }
     mikiriCandidate(p, dx, dy) {
         for (const foe of this.foes) {
-            if (foe.st !== 'ATTACK' || !foe.cur || !foe.cur.perilous || !foe.cur.thrust) continue;
+            if (foe.st !== 'ATTACK' || !foe.cur || !foe.cur.perilous) continue;
             const timing = (foe.phase === 0 && foe.cur.windup - foe.stT < 0.32) || foe.phase === 1;
             if (!timing || p.distTo(foe) > foe.cur.range + 80) continue;
             const a = p.angleTo(foe);
@@ -707,7 +707,7 @@ class Duel {
     }
 
     onMikiri(p, foe) {
-        if (foe.st === 'DEAD' || !foe.cur || !foe.cur.perilous || !foe.cur.thrust) return;
+        if (foe.st === 'DEAD' || !foe.cur || !foe.cur.perilous ) return;
         const a = p.angleTo(foe);
         foe.posture += foe.maxPosture * 0.5;
         foe.postureCd = 1.0;

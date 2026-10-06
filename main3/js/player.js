@@ -128,8 +128,8 @@ class Player extends Actor {
     }
 
     /** Recompute stats and attacks from the equipped gear and learned skills. */
-    applyLoadout() {
-        const lo = this.g.loadout, s = computeStats(lo, this.baseMaxHp, this.baseGourds, this.g.skills);
+   applyLoadout() {
+        const lo = this.g.loadout, s = computeStats(lo, this.baseMaxHp, this.baseGourds, this.g.skills, this.g.stats || { vigor: 10, mind: 10, endurance: 10, strength: 10, dexterity: 10, intelligence: 10, faith: 10, arcane: 10 });
         // an online match hands every fighter the same host-chosen stats, so gear and skills never decide a duel
         const mods = this.g.statMods;
         if (mods) {
@@ -245,6 +245,12 @@ class Player extends Actor {
         if (this.st === 'DEAD') {
             this.deadT += dt;
             return;
+        }
+        this.updateStatuses(dt);
+        if (this.hp <= 0 && this.st !== 'DEAD') {
+            this.die();
+            return;
+        } return;
         }
         if (this.postureCd <= 0 && this.st !== 'STAGGER') {
             const rate = (this.guarding ? 34 : 17) * (0.4 + 0.6 * this.hp / this.maxHp);

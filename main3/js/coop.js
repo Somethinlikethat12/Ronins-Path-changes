@@ -359,7 +359,7 @@ class Coop {
     }
 
     resolvePlayerMikiri(p, attacker) {
-        if (attacker.st === 'DEAD' || !attacker.cur || !attacker.cur.perilous || !attacker.cur.thrust
+        if (attacker.st === 'DEAD' || !attacker.cur || !attacker.cur.perilous 
             || p.st === 'DEAD' || p.distTo(attacker) > attacker.cur.range + 100) return;
         const a = p.angleTo(attacker);
         attacker.posture += attacker.maxPosture * 0.5;
@@ -448,7 +448,7 @@ class Coop {
             e.takeHit(p, a);
         } else if (d.kind === 'deathblow' && (e.st === 'BROKEN' || game.stealthable(e)) && p.distTo(e) < 120 + e.r) {
             game.executeDeathblow(p, e);
-        } else if (d.kind === 'mikiri' && e.atk && e.atk.thrust && p.distTo(e) < e.atk.range + 80) {
+        } else if (d.kind === 'mikiri' && e.atk && e.atk.perilous && p.distTo(e) < e.atk.range + 80) {
             game.onMikiri(p, e);
         } else if (d.kind === 'iai' && p.distTo(e) < 310) e.takeRaw(45 * PLAYER_DAMAGE_SCALE, 70, p.angleTo(e));
     }

@@ -65,57 +65,71 @@ const ARTS = [
 
 const SWORDS = [
     { id: 'wanderer', type: 'katana', name: "Wanderer's Katana", kanji: '打刀', unlock: 0, dmg: 1, post: 1, spd: 1, reach: 0, len: 56, color: rgb(210, 215, 230),
-        desc: 'A plain, honest blade. Balanced in every way.', info: 'Balanced' },
+        scaling: { strength: 'D', dexterity: 'D' },
+        desc: 'A plain, honest blade. Balanced in every way.', info: 'Balanced  -  Str D, Dex D' },
     { id: 'odachi', type: 'katana', name: 'Crimson Odachi', kanji: '大太刀', unlock: 1, poise: 12, dmg: 1.3, post: 1.2, spd: 1.2, reach: 16, len: 70, color: rgb(235, 170, 165),
-        desc: 'Long and heavy. Strikes hard but swings slow, and holds firm mid-swing.', info: 'Damage +30%  -  Reach +16  -  Slower swings' },
+        scaling: { strength: 'B', dexterity: 'E' }, status: { type: 'bleed', val: 35 },
+        desc: 'Long and heavy. Strikes hard but swings slow, and holds firm mid-swing.', info: 'Bleed (35)  -  Str B, Dex E' },
     { id: 'wakizashi', type: 'katana', name: 'Mist Raven Wakizashi', kanji: '脇差', unlock: 2, dmg: 0.82, post: 0.9, spd: 0.72, reach: -10, len: 44, color: rgb(175, 210, 245),
-        desc: 'Short and light. Chains cuts in a blur.', info: 'Much faster swings  -  Less damage and reach' },
+        scaling: { dexterity: 'A' }, status: { type: 'bleed', val: 45 },
+        desc: 'Short and light. Chains cuts in a blur.', info: 'Bleed (45)  -  Dex A' },
     { id: 'sorrow', type: 'katana', name: 'Blade of Sorrow', kanji: '哀刃', unlock: 4, dmg: 1.35, post: 1.5, spd: 1.05, reach: 6, len: 62, color: rgb(210, 70, 80),
-        desc: 'A cursed edge that shatters any guard.', info: 'Damage +35%  -  Posture damage +50%' },
+        scaling: { arcane: 'S', dexterity: 'C' }, status: { type: 'poison', val: 55 },
+        desc: 'A cursed edge that shatters any guard.', info: 'Poison (55)  -  Arc S, Dex C' },
     { id: 'spear', type: 'spear', name: 'Ash Spear', kanji: '槍', unlock: 0, dmg: 0.85, post: 0.85, spd: 1.08, reach: 38, len: 76, color: rgb(205, 220, 225),
+        scaling: { strength: 'D', dexterity: 'C' },
         combo: [new Attack('spear1', 0.12, 0.10, 0.25, 112, 42, 15, 12, 150),
             new Attack('spear2', 0.12, 0.10, 0.25, 112, 42, 15, 12, 150),
             new Attack('spear3', 0.20, 0.12, 0.40, 125, 54, 25, 24, 210)],
-        desc: 'Keep enemies at a distance with narrow thrusts.', info: 'Reach +38  -  Narrow arc  -  Less posture damage' },
+        desc: 'Keep enemies at a distance with narrow thrusts.', info: 'Str D, Dex C' },
     { id: 'storm-spear', type: 'spear', name: 'Tempest Spear', kanji: '嵐槍', unlock: 1, dmg: 0.92, post: 0.92, spd: 0.9, reach: 48, len: 86, color: rgb(165, 205, 235),
+        scaling: { dexterity: 'B', faith: 'C' }, status: { type: 'frost', val: 40 },
         combo: [new Attack('stormSpear1', 0.11, 0.09, 0.24, 118, 36, 15, 12, 170),
             new Attack('stormSpear2', 0.11, 0.09, 0.24, 118, 36, 15, 12, 170),
             new Attack('stormSpear3', 0.18, 0.12, 0.38, 132, 48, 26, 25, 230)],
-        desc: 'A long, quick spear that keeps foes at bay.', info: 'Longer reach  -  Faster thrusts  -  Light hits' },
+        desc: 'A long, quick spear that keeps foes at bay.', info: 'Frost (40)  -  Dex B, Fth C' },
     { id: 'serpent-spear', type: 'spear', name: 'Serpent Fang Spear', kanji: '蛇槍', unlock: 3, dmg: 1.12, post: 1, spd: 1.18, reach: 30, len: 72, color: rgb(150, 205, 165),
+        scaling: { dexterity: 'B', arcane: 'C' }, status: { type: 'poison', val: 40 },
         combo: [new Attack('serpentSpear1', 0.14, 0.11, 0.26, 108, 48, 17, 14, 145),
             new Attack('serpentSpear2', 0.13, 0.10, 0.25, 108, 48, 17, 14, 150),
             new Attack('serpentSpear3', 0.22, 0.14, 0.42, 122, 62, 29, 28, 215)],
-        desc: 'A hooked point built for forceful, accurate thrusts.', info: 'Damage +12%  -  Broad thrusts  -  Faster than Ash Spear' },
+        desc: 'A hooked point built for forceful, accurate thrusts.', info: 'Poison (40)  -  Dex B, Arc C' },
     { id: 'hammer', type: 'hammer', name: 'Iron Hammer', kanji: '鎚', unlock: 0, poise: 26, dmg: 1.25, post: 1.65, spd: 1.45, reach: -8, len: 58, color: rgb(175, 175, 170),
+        scaling: { strength: 'A' },
         combo: [new Attack('hammer1', 0.18, 0.12, 0.32, 84, 150, 17, 20, 120),
             new Attack('hammer2', 0.20, 0.12, 0.32, 84, 150, 17, 20, 120),
             new Attack('hammer3', 0.28, 0.14, 0.52, 96, 185, 27, 32, 170)],
-        desc: 'Slow crushing blows break guards and shrug off light hits mid-swing.', info: 'Posture +65%  -  Hard to interrupt  -  Slow' },
+        desc: 'Slow crushing blows break guards and shrug off light hits mid-swing.', info: 'Str A' },
     { id: 'war-hammer', type: 'hammer', name: 'Ashen Warhammer', kanji: '戦鎚', unlock: 1, poise: 32, dmg: 1.38, post: 1.82, spd: 1.62, reach: -12, len: 64, color: rgb(195, 160, 125),
+        scaling: { strength: 'S' },
         combo: [new Attack('warHammer1', 0.20, 0.12, 0.36, 82, 158, 18, 22, 115),
             new Attack('warHammer2', 0.22, 0.12, 0.36, 82, 158, 18, 22, 115),
             new Attack('warHammer3', 0.31, 0.15, 0.56, 94, 195, 29, 35, 165)],
-        desc: 'A massive two-handed head that batters any guard.', info: 'More damage and posture  -  Very slow  -  Short reach' },
+        desc: 'A massive two-handed head that batters any guard.', info: 'Str S' },
     { id: 'stone-hammer', type: 'hammer', name: 'Stone Maul', kanji: '石鎚', unlock: 3, poise: 38, dmg: 1.52, post: 1.95, spd: 1.78, reach: -16, len: 68, color: rgb(185, 185, 175),
+        scaling: { strength: 'S', faith: 'D' },
         combo: [new Attack('stoneHammer1', 0.23, 0.13, 0.4, 78, 165, 20, 25, 105),
             new Attack('stoneHammer2', 0.24, 0.13, 0.4, 78, 165, 20, 25, 105),
             new Attack('stoneHammer3', 0.34, 0.16, 0.6, 92, 205, 32, 39, 155)],
-        desc: 'A stone-headed maul with devastating but deliberate swings.', info: 'High damage and posture  -  Slowest  -  Shortest reach' },
+        desc: 'A stone-headed maul with devastating but deliberate swings.', info: 'Str S, Fth D' },
     { id: 'axe', type: 'axe', name: 'Woodsman Axe', kanji: '斧', unlock: 0, poise: 16, dmg: 1.18, post: 1.3, spd: 1.22, reach: -3, len: 52, color: rgb(205, 200, 190),
+        scaling: { strength: 'B', dexterity: 'D' },
         combo: [new Attack('axe1', 0.14, 0.11, 0.28, 84, 180, 17, 15, 170),
             new Attack('axe2', 0.14, 0.11, 0.28, 84, 180, 17, 15, 170),
             new Attack('axe3', 0.24, 0.14, 0.45, 98, 240, 27, 27, 220)],
-        desc: 'Broad, heavy chops catch groups.', info: 'Damage +18%  -  Wide arc  -  Slower' },
+        desc: 'Broad, heavy chops catch groups.', info: 'Str B, Dex D' },
 ];
 
 const THROWABLES = [
-    { id: 'shuriken', name: 'Shuriken', kanji: '手裏剣', unlock: 0, max: 5, range: 250, damage: 12, posture: 10, color: rgb(185, 220, 240),
-        desc: 'Quick steel stars for distant targets.', info: '5 throws  -  Fast  -  Refill at shrines' },
-    { id: 'kunai', name: 'Kunai', kanji: '苦無', unlock: 0, max: 4, range: 270, damage: 20, posture: 12, color: rgb(225, 205, 170),
-        desc: 'A heavier knife with greater reach.', info: '4 throws  -  More damage  -  Refill at shrines' },
-    { id: 'throwingaxe', name: 'Throwing Axe', kanji: '飛斧', unlock: 0, max: 3, range: 210, damage: 28, posture: 28, color: rgb(230, 170, 130),
-        desc: 'A short throw that batters guards.', info: '3 throws  -  High posture damage  -  Refill at shrines' },
+    { id: 'shuriken', name: 'Shuriken', kanji: '手裏剣', unlock: 0, max: 5, range: 2500, damage: 12, posture: 10, color: rgb(185, 220, 240),
+        scaling: { dexterity: 'C' },
+        desc: 'Quick steel stars for distant targets.', info: 'Dex C' },
+    { id: 'kunai', name: 'Kunai', kanji: '苦無', unlock: 0, max: 4, range: 2700, damage: 20, posture: 12, color: rgb(225, 205, 170),
+        scaling: { strength: 'D', dexterity: 'B' },
+        desc: 'A heavier knife with greater reach.', info: 'Str D, Dex B' },
+    { id: 'throwingaxe', name: 'Throwing Axe', kanji: '飛斧', unlock: 0, max: 3, range: 2100, damage: 28, posture: 28, color: rgb(230, 170, 130),
+        scaling: { strength: 'B' },
+        desc: 'A short throw that batters guards.', info: 'Str B' },
 ];
 
 const ARMORS = [
@@ -253,15 +267,28 @@ function playerProgression(elites, bossDefeated) {
     };
 }
 
-function computeStats(lo, baseHp, baseGourds, skills) {
+const SCALING_VALS = { 'S': 1.6, 'A': 1.2, 'B': 0.9, 'C': 0.6, 'D': 0.3, 'E': 0.1 };
+
+function getScalingBonus(weapon, stats) {
+    if (!weapon.scaling) return 0;
+    let bonus = 0;
+    for (const [stat, grade] of Object.entries(weapon.scaling)) {
+        const statVal = stats[stat] || 10;
+        bonus += Math.max(0, statVal - 10) * (SCALING_VALS[grade] || 0) * 0.02;
+    }
+    return bonus;
+}
+
+function computeStats(lo, baseHp, baseGourds, skills, pStats = { vigor: 10, mind: 10, endurance: 10, strength: 10, dexterity: 10, intelligence: 10, faith: 10, arcane: 10 }) {
     const sw = lo.swordDef(), ar = lo.armorDef(), ch = lo.charmDef();
     const s = {
-        maxHp: Math.min(baseHp, MAX_PLAYER_HP),
-        maxPosture: 100 + ar.posture + (ch.posture || 0),
+        maxHp: Math.min(MAX_PLAYER_HP, baseHp) + Math.max(0, pStats.vigor - 10) * 30,
+        maxPosture: 100 + ar.posture + (ch.posture || 0) + Math.max(0, pStats.endurance - 10) * 5,
         gourds: Math.min(MAX_PLAYER_GOURDS, baseGourds + (ch.gourds || 0)),
-        charges: BASE_ART_CHARGES + (ch.charges || 0),
-        dmg: sw.dmg * (ch.dmg || 1) * PLAYER_DAMAGE_SCALE,
-        post: sw.post,
+        charges: BASE_ART_CHARGES + (ch.charges || 0) + Math.floor(Math.max(0, pStats.mind - 10) / 10),
+        dmg: sw.dmg * (ch.dmg || 1) * PLAYER_DAMAGE_SCALE * (1 + getScalingBonus(sw, pStats)),
+        post: sw.post * (1 + getScalingBonus(sw, pStats) * 0.5),
+        status: sw.status ? { type: sw.status.type, val: sw.status.val * (1 + Math.max(0, pStats.arcane - 10) * 0.03) } : null,
         spd: sw.spd,
         reach: sw.reach,
         poise: sw.poise || 0,
@@ -293,9 +320,10 @@ function scaledAttack(a, s) {
         a.posture * s.post, a.lunge);
     b.perilous = !!a.perilous;
     b.thrust = !!a.thrust;
-    b.art = !!a.art;
+   b.art = !!a.art;
     b.heavy = !!a.heavy;
     b.pierce = !!a.pierce;
+    b.status = s.status;
     return b;
 }
 
@@ -323,8 +351,10 @@ const STAT_ROWS = [
     ['Dodge I-frames', s => s.iframes * 1000, v => Math.round(v) + 'ms', 1],
 ];
 
-const LOOK_TAB = EQUIP_SLOTS.length;
-const SKILL_TAB = EQUIP_SLOTS.length + 1;
+const LEVEL_TAB = 0;
+const EQUIP_OFFSET = 1;
+const LOOK_TAB = EQUIP_SLOTS.length + EQUIP_OFFSET;
+const SKILL_TAB = EQUIP_SLOTS.length + EQUIP_OFFSET + 1;
 
 /** Pause-screen menu for combat arts, gear, appearance and the skill tree. */
 class EquipMenu {
@@ -333,8 +363,8 @@ class EquipMenu {
         this.open = false;
         this.tab = 0;
         this.weaponTypeTab = 0;
-        this.sel = new Array(EQUIP_SLOTS.length + 2).fill(0);
-        this.scroll = new Array(EQUIP_SLOTS.length + 2).fill(0);
+        this.sel = new Array(EQUIP_SLOTS.length + 3).fill(0);
+        this.scroll = new Array(EQUIP_SLOTS.length + 3).fill(0);
         this.rects = { tab: -1, tabs: [], subtabs: [], rows: [], swatches: [] };
         this.lastMx = -1;
         this.lastMy = -1;
@@ -357,8 +387,10 @@ class EquipMenu {
     }
 
     tabIndices() {
-        if (this.tab < EQUIP_SLOTS.length) {
-            return this.tab === 1 ? this.weaponIndices() : EQUIP_SLOTS[this.tab].list.map((_, i) => i);
+        if (this.tab === LEVEL_TAB) return [0, 1, 2, 3, 4, 5, 6, 7];
+        const eqTab = this.tab - EQUIP_OFFSET;
+        if (eqTab >= 0 && eqTab < EQUIP_SLOTS.length) {
+            return eqTab === 1 ? this.weaponIndices() : EQUIP_SLOTS[eqTab].list.map((_, i) => i);
         }
         return LOOKS.map((_, i) => i);
     }
@@ -388,11 +420,12 @@ class EquipMenu {
             this.open = false;
             return;
         }
-        const nTabs = EQUIP_SLOTS.length + 2, prevTab = this.tab;
+        const nTabs = EQUIP_SLOTS.length + 3, prevTab = this.tab;
         if (inp.hit('KeyQ')) this.tab = (this.tab + nTabs - 1) % nTabs;
         if (inp.hit('KeyE')) this.tab = (this.tab + 1) % nTabs;
+        const levelTab = this.tab === LEVEL_TAB;
         const appearance = this.tab === LOOK_TAB, skillsTab = this.tab === SKILL_TAB;
-        if (this.tab === 1) {
+        if (this.tab === EQUIP_OFFSET + 1) {
             if (inp.hit('KeyA') || inp.hit('ArrowLeft')) {
                 this.selectWeaponType((this.weaponTypeTab + WEAPON_TYPES.length - 1) % WEAPON_TYPES.length);
             }
@@ -415,7 +448,7 @@ class EquipMenu {
             if (appearance) {
                 if (inp.hit('KeyA') || inp.hit('ArrowLeft')) this.cycleLook(this.sel[this.tab], -1);
                 if (inp.hit('KeyD') || inp.hit('ArrowRight')) this.cycleLook(this.sel[this.tab], 1);
-            } else if (inp.hit('Enter') || inp.hit('NumpadEnter') || inp.hit('Space')) this.equip(this.sel[this.tab]);
+            } else if (!levelTab && (inp.hit('Enter') || inp.hit('NumpadEnter') || inp.hit('Space'))) this.equip(this.sel[this.tab]);
         }
 
         const mx = inp.mx, my = inp.my, moved = mx !== this.lastMx || my !== this.lastMy, click = inp.mouseHit(1);
@@ -441,15 +474,23 @@ class EquipMenu {
         for (const r of this.rects.rows) {
             if (!inside(r)) continue;
             if (skillsTab) {
-                // skills cost points, so a click selects and a second click on the same node learns it
                 if (click) {
                     if (this.sel[SKILL_TAB] === r.i) this.learn(r.i);
                     else this.sel[SKILL_TAB] = r.i;
                 }
                 continue;
+            } else if (levelTab) {
+                if (moved || click) this.sel[LEVEL_TAB] = r.i;
+                if (click) this.levelUpStat(r.stat);
+                continue;
             }
             if (moved || click) this.sel[this.tab] = r.i;
             if (click && !appearance) this.equip(r.i);
+        }
+        
+        if (levelTab && (inp.hit('Enter') || inp.hit('NumpadEnter') || inp.hit('Space'))) {
+            const statList = ['vigor', 'mind', 'endurance', 'strength', 'dexterity', 'intelligence', 'faith', 'arcane'];
+            this.levelUpStat(statList[this.sel[LEVEL_TAB]]);
         }
     }
 
@@ -484,8 +525,26 @@ class EquipMenu {
         return skills.has(sk.id) ? skills : new Set([...skills, sk.id]);
     }
 
+    levelUpStat(stat) {
+        const cost = Math.floor(0.02 * Math.pow(this.g.level, 3) + 3.06 * Math.pow(this.g.level, 2) + 105.6 * this.g.level);
+        if (this.g.runes >= cost) {
+            this.g.runes -= cost;
+            this.g.level++;
+            this.g.stats[stat]++;
+            this.g.player.applyLoadout();
+            this.g.player.hp += (stat === 'vigor') ? 30 : 0;
+            this.g.sfx.play('SHRINE');
+            this.g.saveSoon();
+            this.note(stat.charAt(0).toUpperCase() + stat.slice(1) + ' increased!');
+        } else {
+            this.g.sfx.play('BLOCK');
+            this.note('Not enough Runes');
+        }
+    }
+
     equip(i) {
-        const g = this.g, slot = EQUIP_SLOTS[this.tab], it = slot.list[i];
+        if (this.tab < EQUIP_OFFSET || this.tab >= EQUIP_SLOTS.length + EQUIP_OFFSET) return;
+        const g = this.g, slot = EQUIP_SLOTS[this.tab - EQUIP_OFFSET], it = slot.list[i];
         if (!this.unlocked(it)) {
             this.note('Locked  -  slay ' + it.unlock + ' elite' + (it.unlock > 1 ? 's' : '') + ' to unlock');
             g.sfx.play('BLOCK');
@@ -526,10 +585,21 @@ class EquipMenu {
 
     previewLoadout() {
         const lo = this.g.loadout;
-        if (this.tab >= EQUIP_SLOTS.length) return lo;
-        const slot = EQUIP_SLOTS[this.tab], p = lo.clone(), idx = this.sel[this.tab];
+        if (this.tab < EQUIP_OFFSET || this.tab >= EQUIP_SLOTS.length + EQUIP_OFFSET) return lo;
+        const slot = EQUIP_SLOTS[this.tab - EQUIP_OFFSET], p = lo.clone(), idx = this.sel[this.tab];
         p[slot.field] = slot.list[idx].id;
         return p;
+    }
+
+    previewStats() {
+        const game = this.g;
+        const pStats = Object.assign({}, game.stats);
+        if (this.tab === LEVEL_TAB) {
+            const statList = ['vigor', 'mind', 'endurance', 'strength', 'dexterity', 'intelligence', 'faith', 'arcane'];
+            const stat = statList[this.sel[LEVEL_TAB]];
+            pStats[stat]++;
+        }
+        return pStats;
     }
 
     rightText(g, s, x, y, c) {
@@ -559,7 +629,7 @@ class EquipMenu {
             this.rightText(g, this.msg, X + W - 24, Y + 38, rgb(255, 220, 150));
         }
 
-        const labels = EQUIP_SLOTS.map(s => s.label).concat('Appearance', game.skillPoints > 0 ? 'Skills (' + game.skillPoints + ')' : 'Skills');
+        const labels = ['Level Up'].concat(EQUIP_SLOTS.map(s => s.label)).concat('Appearance', game.skillPoints > 0 ? 'Skills (' + game.skillPoints + ')' : 'Skills');
         const tw = (W - 48) / labels.length;
         labels.forEach((l, i) => {
             const r = { x: X + 24 + i * tw, y: Y + 58, w: tw - 6, h: 34, i };
@@ -576,7 +646,8 @@ class EquipMenu {
         this.drawPreview(g, X + 24, top, 300, 200, preview);
         this.drawStats(g, X + 24, top + 222, 300, preview, this.previewSkills());
         const lx = X + 344, lw = W - 368;
-        if (this.tab < EQUIP_SLOTS.length) this.drawList(g, lx, top, lw, bottom - top, R);
+        if (this.tab === LEVEL_TAB) this.drawLevelUp(g, lx, top, lw, bottom - top, R);
+        else if (this.tab < EQUIP_SLOTS.length + EQUIP_OFFSET) this.drawList(g, lx, top, lw, bottom - top, R);
         else if (skillsTab) this.drawSkills(g, lx, top, lw, bottom - top, R);
         else this.drawLooks(g, lx, top, lw, R);
 
@@ -606,10 +677,37 @@ class EquipMenu {
         this.g.text(g, art.kanji, x + 12, y + 38, U.alpha(art.color, 0.8), false);
     }
 
+    drawLevelUp(g, x, y, w, h, R) {
+        const game = this.g;
+        const stats = game.stats;
+        const statNames = ['vigor', 'mind', 'endurance', 'strength', 'dexterity', 'intelligence', 'faith', 'arcane'];
+        
+        let cost = Math.floor(0.02 * Math.pow(game.level, 3) + 3.06 * Math.pow(game.level, 2) + 105.6 * game.level);
+        
+        g.font = 'bold 20px serif';
+        this.g.text(g, 'Runes: ' + game.runes, x + 16, y + 24, rgb(210, 190, 140), false);
+        this.g.text(g, 'Level: ' + game.level, x + w - 120, y + 24, rgb(210, 190, 140), false);
+        this.g.text(g, 'Runes needed: ' + cost, x + 16, y + 50, game.runes >= cost ? rgb(140, 220, 140) : rgb(220, 140, 140), false);
+
+        statNames.forEach((stat, i) => {
+            const ry = y + 80 + i * 40;
+            R.rows.push({ x, y: ry, w, h: 36, i, stat });
+            roundRectPath(g, x, ry, w, 36, 6);
+            g.fillStyle = i === this.sel[LEVEL_TAB] ? 'rgb(72,50,40)' : 'rgb(38,30,28)';
+            g.fill();
+            g.font = 'bold 16px serif';
+            this.g.text(g, stat.charAt(0).toUpperCase() + stat.slice(1), x + 16, ry + 24, rgb(245, 235, 215), false);
+            this.rightText(g, String(stats[stat]), x + w - 16, ry + 24, rgb(255, 255, 255));
+        });
+        
+        g.font = SMALL_FONT;
+        this.g.text(g, 'Press Enter or Click to level up selected stat', x + 16, y + 420, rgb(180, 170, 150), false);
+    }
+
     drawStats(g, x, y, w, preview, previewSkills) {
         const game = this.g, p = game.player;
-        const cur = computeStats(game.loadout, p.baseMaxHp, p.baseGourds, game.skills);
-        const nxt = computeStats(preview, p.baseMaxHp, p.baseGourds, previewSkills);
+        const cur = computeStats(game.loadout, p.baseMaxHp, p.baseGourds, game.skills, game.stats);
+        const nxt = computeStats(preview, p.baseMaxHp, p.baseGourds, previewSkills, this.previewStats());
         let yy = y;
         for (const [label, fn, fmt, better] of STAT_ROWS) {
             const a = fn(cur), b = fn(nxt);
@@ -629,7 +727,7 @@ class EquipMenu {
     }
 
     drawList(g, x, y, w, h, R) {
-        const game = this.g, lo = game.loadout, slot = EQUIP_SLOTS[this.tab];
+        const game = this.g, lo = game.loadout, slot = EQUIP_SLOTS[this.tab - EQUIP_OFFSET];
         const indices = this.tabIndices(), list = indices.map(i => slot.list[i]);
         if (this.tab === 1) {
             const gap = 5, tabW = (w - gap * (WEAPON_TYPES.length - 1)) / WEAPON_TYPES.length;
@@ -708,7 +806,7 @@ class EquipMenu {
         this.rightText(g, 'Skill Points: ' + game.skillPoints, x + w - 6, y + 14,
             game.skillPoints > 0 ? rgb(255, 215, 110) : rgb(170, 160, 150));
 
-        const colW = w / 3, nodeR = 20, y0 = y + 92, gap = 52;
+        const colW = w / 3, nodeR = 13, y0 = y + 85, gap = 30;
         SKILL_BRANCHES.forEach((br, b) => {
             const cx = x + colW * (b + 0.5);
             g.font = 'bold 22px ' + KANJI_FAMILY;
@@ -739,11 +837,11 @@ class EquipMenu {
                     g.arc(cx, cy, nodeR + 6, 0, TAU);
                     g.stroke();
                 }
-                g.font = 'bold 20px ' + KANJI_FAMILY;
-                game.text(g, sk.kanji, cx, cy + 7, owned ? rgb(40, 24, 18) : open ? br.color : rgb(100, 90, 84), true);
+                g.font = 'bold 16px ' + KANJI_FAMILY;
+                game.text(g, sk.kanji, cx, cy + 5, owned ? rgb(40, 24, 18) : open ? br.color : rgb(100, 90, 84), true);
                 if (!owned) {
-                    g.font = 'bold 11px sans-serif';
-                    game.text(g, sk.cost + ' pt', cx + nodeR + 16, cy + 4, open ? rgb(230, 215, 190) : rgb(110, 100, 94), true);
+                    g.font = 'bold 10px sans-serif';
+                    game.text(g, sk.cost + ' pt', cx + nodeR + 6, cy + 4, open ? rgb(230, 215, 190) : rgb(110, 100, 94), true);
                 }
                 R.rows.push({ x: cx - nodeR, y: cy - nodeR, w: nodeR * 2, h: nodeR * 2, i });
             }
@@ -755,12 +853,12 @@ class EquipMenu {
         g.fill();
         const br = SKILL_BRANCHES[selSk.branch], owned = skills.has(selSk.id), pre = skillPrereq(selSk);
         g.font = 'bold 18px serif';
-        game.text(g, selSk.name, x + 16, dy + 28, rgb(245, 235, 215), false);
+        game.text(g, selSk.name, x + 16, dy + 24, rgb(245, 235, 215), false);
         g.font = 'bold 13px serif';
-        this.rightText(g, br.name, x + w - 14, dy + 26, br.color);
+        this.rightText(g, br.name, x + w - 14, dy + 22, br.color);
         g.font = SMALL_FONT;
-        game.text(g, selSk.desc, x + 16, dy + 50, rgb(200, 190, 175), false);
-        game.text(g, selSk.info, x + 16, dy + 72, rgb(140, 210, 200), false);
+        game.text(g, selSk.desc, x + 16, dy + 44, rgb(200, 190, 175), false);
+        game.text(g, selSk.info, x + 16, dy + 64, rgb(140, 210, 200), false);
         g.font = 'bold 14px sans-serif';
         let status, c;
         if (owned) {
@@ -776,7 +874,7 @@ class EquipMenu {
             status = 'Costs ' + selSk.cost + ' skill point' + (selSk.cost > 1 ? 's' : '') + '  -  Enter or click again to learn';
             c = rgb(150, 235, 150);
         }
-        if (dh > 100) game.text(g, status, x + 16, dy + 98, c, false);
+        if (dh > 90) game.text(g, status, x + 16, dy + 88, c, false);
     }
 
     drawLooks(g, x, y, w, R) {

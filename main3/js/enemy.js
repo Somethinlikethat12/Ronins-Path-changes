@@ -386,6 +386,16 @@ class Enemy extends Actor {
             this.deadT += dt;
             return;
         }
+        this.updateStatuses(dt);
+        if (this.hp <= 0 && this.st !== 'DEAD') {
+            if (this.elite) {
+                this.hp = 1;
+                this.breakPosture();
+            } else {
+                this.die(this.facing);
+                return;
+            }
+        }
         const g = this.g, p = this.pickTarget();
         this.target = p;
         this.stT += dt;
@@ -761,7 +771,25 @@ class Enemy extends Actor {
             return;
         }
         this.blockStreak = 0;
-        const dmg = pa.damage * (wasAware ? 1 : 2);
+        let dmg = pa.damage * (wasAware ? 1 : 2);
+        if (this.frostT > 0) dmg *= 1.2;
+        if (pa.status) {
+            const proc = this.applyStatus(pa.status.type, pa.status.val);
+            if (proc === 'bleed') {
+                g.fx.blood(cx, cy, ang, 40, 500);
+                g.sfx.play('DEATHBLOW');
+                this.hp -= this.maxHp * 0.15;
+                g.fx.text('HEMORRHAGE', this.x, this.y - 50, rgb(200, 20, 20), 20);
+            } else if (proc === 'frost') {
+                g.fx.sparks(cx, cy, ang, TAU, 30, 400, rgb(150, 200, 255));
+                g.sfx.play('PARRY');
+                this.hp -= this.maxHp * 0.10;
+                g.fx.text('FROSTBITE', this.x, this.y - 50, rgb(150, 200, 255), 20);
+            } else if (proc === 'poison') {
+                g.fx.sparks(cx, cy, ang, TAU, 20, 300, rgb(100, 200, 100));
+                g.fx.text('POISONED', this.x, this.y - 50, rgb(100, 200, 100), 20);
+            }
+        }
         this.hp -= dmg;
         this.posture += pa.posture * 0.6;
         this.hitFlash = 0.12;
@@ -1082,7 +1110,23 @@ class Enemy extends Actor {
             g2.fillRect(bx - 1, by - 1, w + 2, 6);
             g2.fillStyle = 'rgb(200,40,40)';
             g2.fillRect(bx, by, w * U.clamp(this.hp / this.maxHp, 0, 1), 4);
-            if (this.posture > 1) Draw.postureBar(g2, x, by + 7, w, 3, this.posture / this.maxPosture, this.st === 'BROKEN');
+            let barY = by + 7;
+            if (this.posture > 1) { Draw.postureBar(g2, x, barY, w, 3, this.posture / this.maxPosture, this.st === 'BROKEN'); barY += 5; }
+            if (this.bleed > 0) {
+                g2.fillStyle = 'rgba(0,0,0,0.5)'; g2.fillRect(bx, barY, w, 3);
+                g2.fillStyle = 'rgb(200,20,20)'; g2.fillRect(bx, barY, w * (this.bleed/100), 3);
+                barY += 4;
+            }
+            if (this.frost > 0) {
+                g2.fillStyle = 'rgba(0,0,0,0.5)'; g2.fillRect(bx, barY, w, 3);
+                g2.fillStyle = 'rgb(150,200,255)'; g2.fillRect(bx, barY, w * (this.frost/100), 3);
+                barY += 4;
+            }
+            if (this.poison > 0) {
+                g2.fillStyle = 'rgba(0,0,0,0.5)'; g2.fillRect(bx, barY, w, 3);
+                g2.fillStyle = 'rgb(100,200,100)'; g2.fillRect(bx, barY, w * (this.poison/100), 3);
+                barY += 4;
+            }
         }
     }
 }

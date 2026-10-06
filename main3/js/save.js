@@ -66,6 +66,9 @@ const SaveGame = {
             bossSpawned: game.bossSpawned,
             bossDefeated: game.bossDefeated,
             exp: game.exp,
+            runes: game.runes,
+            level: game.level,
+            stats: game.stats,
             pointsEarned: game.pointsEarned,
             skills: [...game.skills],
             loadout: game.loadout.toData(),
@@ -103,6 +106,10 @@ const SaveGame = {
         game.loadout.apply(d.loadout, game.elitesSlain);
         game.pointsEarned = Math.trunc(num(d.pointsEarned, 0, 1000, 0));
         game.exp = num(d.exp, 0, expForNextPoint(game.pointsEarned) - 1, 0);
+        game.runes = num(d.runes, 0, 1e9, 0);
+        game.level = num(d.level, 1, 713, 1);
+        if (d.stats && typeof d.stats.vigor === 'number') game.stats = Object.assign({}, d.stats);
+        // only keep skills whose prerequisites are learned and that fit in the points earned
         // only keep skills whose prerequisites are learned and that fit in the points earned
         const wanted = new Set(Array.isArray(d.skills) ? d.skills.filter(id => typeof id === 'string') : []);
         let spent = 0;
