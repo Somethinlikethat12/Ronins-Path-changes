@@ -15,6 +15,17 @@ const { Enemy, Game, EA, difficultyFor, ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_HP_SCAL
         + 'NORMAL_ENEMY_DAMAGE_SCALE, NORMAL_ENEMY_SPEED_SCALE })', context);
 
 const game = { difficulty: difficultyFor(null, 1, 0) };
+const areaStrengths = vm.runInContext('BIOME_ENEMY_STRENGTH', context);
+assert.equal(areaStrengths.length, 3);
+assert(areaStrengths[0].hp < areaStrengths[1].hp && areaStrengths[1].hp < areaStrengths[2].hp);
+assert(areaStrengths[0].damage < areaStrengths[1].damage && areaStrengths[1].damage < areaStrengths[2].damage);
+for (const area of areaStrengths) {
+    const areaGame = { difficulty: game.difficulty, world: { enemyStrengthAt: () => area } };
+    const enemy = new Enemy(areaGame, 'RONIN', 100, 100, false, null, 7);
+    assert.equal(enemy.maxHp, 82 * NORMAL_ENEMY_HP_SCALE * area.hp);
+    assert.equal(enemy.maxPosture, 82 * NORMAL_ENEMY_POSTURE_SCALE * area.posture);
+    assert.equal(enemy.dmgScale, ENEMY_DAMAGE_SCALE * NORMAL_ENEMY_DAMAGE_SCALE * area.damage);
+}
 const types = [
     ['RONIN', 82, 82, 150, 'backhand'],
     ['SPEAR', 72, 72, 140, 'hook'],
@@ -49,10 +60,13 @@ assert.equal(scaledEnemy.dmgScale, ENEMY_DAMAGE_SCALE * NORMAL_ENEMY_DAMAGE_SCAL
 
 const live = { coop: { settings: {} }, coopSettings: { enemyScale: 25, countScale: 25 },
     difficulty: difficultyFor({ enemyScale: 25, countScale: 25 }, 2, 0), partySize: 2, ngPlus: 0,
-    enemies: [new Enemy({ difficulty: difficultyFor({ enemyScale: 25 }, 2, 0) }, 'RONIN', 100, 100, false, null, 7)] };
+    enemies: [new Enemy({ difficulty: difficultyFor({ enemyScale: 25 }, 2, 0),
+        world: { enemyStrengthAt: () => areaStrengths[2] } }, 'RONIN', 100, 100, false, null, 7)] };
 Game.prototype.applyCoopSettings.call(live, { enemyScale: 50, countScale: 25 });
-assert.equal(live.enemies[0].dmgScale, ENEMY_DAMAGE_SCALE * NORMAL_ENEMY_DAMAGE_SCALE * live.difficulty.enemyDmg);
-assert(Math.abs(live.enemies[0].maxHp - 82 * NORMAL_ENEMY_HP_SCALE * live.difficulty.enemyHp) < 1e-9);
+assert.equal(live.enemies[0].dmgScale,
+    ENEMY_DAMAGE_SCALE * NORMAL_ENEMY_DAMAGE_SCALE * live.difficulty.enemyDmg * areaStrengths[2].damage);
+assert(Math.abs(live.enemies[0].maxHp - 82 * NORMAL_ENEMY_HP_SCALE * areaStrengths[2].hp
+    * live.difficulty.enemyHp) < 1e-9);
 
 const rolePlayer = {
     x: 100, y: 100, r: 16, st: 'FREE', facing: 0,
@@ -300,105 +314,8 @@ assert.equal(parrier.st, 'WINDUP');
 assert.equal(parrier.hasToken, true);
 assert.equal(parrier.attackRead, 0);
 
-// sword clash: elites lock blades with a solo player mid-swing; NG+ needs more clicks and has more targets
-const clashParams = vm.runInContext('clashParams', context);
-const ng0 = clashParams(0), ng7 = clashParams(7);
-assert(ng7.step < ng0.step && ng7.penalty > ng0.penalty && ng7.targets > ng0.targets);
-assert(ng0.enemyPush > 0 && ng7.enemyPush > ng0.enemyPush);
-assert(ng7.radius < ng0.radius && ng0.targets > 1);
-assert(ng0.step < 0.095 && ng7.step < 0.07);
-assert(ng0.step > 0.08 && ng0.enemyPush < 0.14 && ng0.radius > 36);
-assert(ng0.radius >= 16 && ng7.radius >= 16);
-const clashPlayerForQte = { x: 0, y: 0, st: 'CLASH' };
-const clashEnemyForQte = { x: 100, y: 0, st: 'CLASH' };
-let qteMouseHit = false, qteMouseX = 100, qteMouseY = 400;
-const qteTargets = [{ x: 100, y: 400, r: ng0.radius }, { x: 300, y: 400, r: ng0.radius }, { x: 500, y: 400, r: ng0.radius }];
-const qteGame = Object.assign(Object.create(Game.prototype), {
-    clash: { e: clashEnemyForQte, params: ng0, progress: 0.5, timeLeft: 20, targets: qteTargets, flash: 0, wrongT: 0, ang: 0 },
-    player: clashPlayerForQte,
-    input: { mouseHit: () => qteMouseHit, mx: qteMouseX, my: qteMouseY },
-    canvas: { width: 1000, height: 800 },
-    fx: { sparks(...args) { this.sparkCalls.push(args); }, ring() { this.ringCount++; }, update() {},
-        sparkCalls: [], ringCount: 0 },
-    sfx: { play(name) { this.lastSound = name; } },
-    hitstop(seconds) { this.lastHitstop = seconds; },
-    parryBurst(x, y, strength) { this.lastParry = [x, y, strength]; },
-    shake(amount) { this.lastShake = amount; },
-    zoomKick(amount) { this.lastZoomKick = amount; },
-    flash(color, amount) { this.lastFlash = amount; },
-    shakeAmt: 0,
-    zoomKickV: 0,
-    flashA: 0,
-});
-qteGame.tickClash(0.5);
-assert.equal(qteGame.clash.targets.length, ng0.targets);
-assert.equal(qteGame.clash.progress, 0.5 - 0.5 * ng0.enemyPush);
-assert.equal(qteGame.clash.timeLeft, 19.5);
-const progressAfterPush = qteGame.clash.progress;
-qteMouseHit = true;
-qteGame.input.mx = qteMouseX;
-qteGame.input.my = qteMouseY;
-qteGame.tickClash(1 / 60);
-assert.equal(qteGame.clash.targets.length, ng0.targets);
-assert.equal(qteGame.clash.progress, progressAfterPush - ng0.enemyPush / 60 + ng0.step);
-assert.equal(qteGame.clash.timeLeft, 19.5 - 1 / 60);
-assert(qteGame.fx.sparkCalls.some(args => args[4] === 24));
-assert(qteGame.fx.ringCount > 0);
-assert.equal(qteGame.sfx.lastSound, 'CLANG');
-assert.equal(qteGame.lastHitstop, 0.045);
-assert.equal(qteGame.lastShake, 6);
-assert(qteGame.lastZoomKick > 0 && qteGame.lastFlash > 0 && qteGame.lastParry[2] > 0);
-qteMouseHit = false;
-const progressAfterHit = qteGame.clash.progress;
-qteGame.tickClash(0.5);
-assert.equal(qteGame.clash.progress, progressAfterHit - 0.5 * ng0.enemyPush);
-assert.equal(qteGame.clash.targets.length, ng0.targets);
-
-const timeoutText = [];
-const timeoutPlayer = { st: 'CLASH', posture: 0, maxPosture: 100, invuln: 1,
-    toFree() { this.st = 'FREE'; }, receive() {} };
-const timeoutEnemy = { st: 'CLASH', dmgScale: 1, posture: 0, maxPosture: 100,
-    setSt(state) { this.st = state; } };
-const timeoutGame = Object.assign(Object.create(Game.prototype), {
-    clash: { e: timeoutEnemy, params: Object.assign({}, ng0, { enemyPush: 0 }), progress: 0.5,
-        timeLeft: 1 / 60, targets: [], flash: 0, wrongT: 0, ang: 0 },
-    player: timeoutPlayer,
-    input: { mouseHit: () => false, mx: 0, my: 0 },
-    canvas: { width: 1000, height: 800 },
-    fx: { sparks() {}, ring() {}, update() {}, text(label) { timeoutText.push(label); } },
-    sfx: { play() {} },
-    shake() {}, hitstop() {}, slowmo() {}, flash() {}, parryBurst() {},
-    shakeAmt: 0, zoomKickV: 0, flashA: 0, time: 0,
-});
-timeoutGame.tickClash(1 / 60);
-assert.equal(timeoutGame.clash, null);
-assert.equal(timeoutPlayer.st, 'FREE');
-assert.equal(timeoutEnemy.st, 'ENGAGE');
-assert(timeoutText.includes('TIME EXPIRED'));
-const clashPlayer = Object.assign({}, attacker, { st: 'ATTACK', facing: 0 });
-const clashGame = Object.assign(Object.create(combatGame), { player: clashPlayer, coop: null, clash: null,
-    clashes: 0, startClash(e) { this.clashes++; this.clash = { e }; e.setSt('CLASH'); } });
-const duelist = new Enemy(clashGame, 'RONIN', 100, 100, true, null, 9);
-duelist.aware = true;
-duelist.clashCd = 0;
-duelist.facing = Math.PI;
-duelist.rnd.nextDouble = () => 0;
-duelist.startCombo([EA.R_BACKHAND], 1);
-duelist.setSt('ACTIVE');
-const hpBefore = duelist.hp;
-duelist.takeHit(clashPlayer, parryStrike);
-assert.equal(clashGame.clashes, 1);
-assert.equal(duelist.st, 'CLASH');
-assert.equal(duelist.hp, hpBefore);
-assert(duelist.clashCd > 0);
-const grunt = new Enemy(clashGame, 'RONIN', 100, 100, false, null, 9);
-grunt.aware = true;
-grunt.facing = Math.PI;
-grunt.clashCd = 0;
-grunt.startCombo([EA.R_BACKHAND], 1);
-grunt.setSt('ACTIVE');
-clashGame.clash = null;
-grunt.takeHit(clashPlayer, parryStrike);
-assert.equal(clashGame.clashes, 1);
+assert.equal(typeof Game.prototype.startClash, 'undefined');
+assert.equal(typeof Game.prototype.tickClash, 'undefined');
+assert.equal(typeof Enemy.prototype.tryClash, 'undefined');
 
 console.log('Enemy variation and scaling checks passed');

@@ -11,6 +11,11 @@ const SHRINE_NAMES = ['Shrine of First Light', 'Moonlit Shrine', 'Shrine of Fall
 const ELITES = [['Kagemaru the Silent', 'RONIN'], ['Gozu, Oni Warlord', 'BRUTE'],
     ['Lady Tomoe of the Crimson Spear', 'SPEAR'], ['Ryusei, the Fallen Blade', 'RONIN'], ['Okami, the Hollow Monk', 'SPEAR']];
 const GROUND_BASE = [rgb(86, 128, 64), rgb(128, 122, 62), rgb(66, 112, 58)];
+const BIOME_ENEMY_STRENGTH = [
+    { label: 'Low threat', hp: 0.8, posture: 0.85, damage: 0.85 },
+    { label: 'Moderate threat', hp: 1, posture: 1, damage: 1 },
+    { label: 'High threat', hp: 1.25, posture: 1.2, damage: 1.15 },
+];
 
 class World {
     constructor(seed) {
@@ -69,6 +74,10 @@ class World {
             case 2: return 'Whispering Bamboo Grove';
             default: return 'Sakura Fields';
         }
+    }
+
+    enemyStrengthAt(x, y) {
+        return BIOME_ENEMY_STRENGTH[this.biome(x, y)];
     }
 
     groundColor(x, y) {

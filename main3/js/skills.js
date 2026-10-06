@@ -53,7 +53,7 @@ const SKILLS = [
         info: 'Damage +50%  -  Posture damage +30%', apply: s => { s.dmg *= 1.5; s.post *= 1.3; } },
 
     // Branch 2: Mystic / Spear
-    { id: 'echo', branch: 2, tier: 0, cost: 1, name: 'Spirit Echo', kanji: '霊', desc: 'Every clash feeds the art within you.',
+    { id: 'echo', branch: 2, tier: 0, cost: 1, name: 'Spirit Echo', kanji: '霊', desc: 'Battle awakens more power in your combat arts.',
         info: '+1 art charge  -  Combat Arts +25% damage', apply: s => { s.charges += 1; s.artDmg *= 1.25; } },
     { id: 'reach', branch: 2, tier: 1, cost: 1, name: 'Extended Reach', kanji: '伸', desc: 'Project your ki through your weapon.',
         info: 'Weapon reach +12', apply: s => { s.reach += 12; } },
