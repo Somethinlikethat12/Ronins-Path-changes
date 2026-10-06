@@ -79,7 +79,7 @@ class Coop {
 
     static playerData(p) {
         return Object.assign(Coop.fields(p, COOP_PLAYER_FIELDS),
-            { sword: p.g.loadout.sword, throwable: p.g.loadout.throwable, art: p.g.loadout.art, armor: p.g.loadout.armor });
+            { sword: p.g.loadout.sword, throwable: p.g.loadout.throwable, art: p.g.loadout.art, armor: p.g.loadout.armor, charm: p.g.loadout.charm });
     }
 
     static syncGear(p, data) {
@@ -88,15 +88,17 @@ class Coop {
         const weapon = SWORDS.find(w => w.id === data.sword);
         const throwable = THROWABLES.find(w => w.id === data.throwable);
         const armor = ARMORS.find(a => a.id === data.armor);
+        const charm = CHARMS.find(c => c.id === data.charm);
         const nextWeapon = weapon || lo.swordDef();
         const art = ARTS.find(a => a.id === data.art);
         const nextArt = art && artMatchesWeapon(art, nextWeapon) ? art.id
             : !artMatchesWeapon(lo.artDef(), nextWeapon) ? ARTS[0].id : lo.art;
         if ((weapon && lo.sword !== weapon.id) || (throwable && lo.throwable !== throwable.id) || lo.art !== nextArt
-            || (armor && lo.armor !== armor.id)) {
+            || (armor && lo.armor !== armor.id) || (charm && lo.charm !== charm.id)) {
             if (weapon) lo.sword = weapon.id;
             if (throwable) lo.throwable = throwable.id;
             if (armor) lo.armor = armor.id;
+            if (charm) lo.charm = charm.id;
             lo.art = nextArt;
             p.applyLoadout();
         }

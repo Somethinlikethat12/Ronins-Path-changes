@@ -390,7 +390,7 @@ class EquipMenu {
         if (this.tab === LEVEL_TAB) return [0, 1, 2, 3, 4, 5, 6, 7];
         const eqTab = this.tab - EQUIP_OFFSET;
         if (eqTab >= 0 && eqTab < EQUIP_SLOTS.length) {
-            return eqTab === 1 ? this.weaponIndices() : EQUIP_SLOTS[eqTab].list.map((_, i) => i);
+            return eqTab === 0 ? this.weaponIndices() : EQUIP_SLOTS[eqTab].list.map((_, i) => i);
         }
         return LOOKS.map((_, i) => i);
     }
@@ -425,7 +425,7 @@ class EquipMenu {
         if (inp.hit('KeyE')) this.tab = (this.tab + 1) % nTabs;
         const levelTab = this.tab === LEVEL_TAB;
         const appearance = this.tab === LOOK_TAB, skillsTab = this.tab === SKILL_TAB;
-        if (this.tab === EQUIP_OFFSET + 1) {
+        if (this.tab === 1) {
             if (inp.hit('KeyA') || inp.hit('ArrowLeft')) {
                 this.selectWeaponType((this.weaponTypeTab + WEAPON_TYPES.length - 1) % WEAPON_TYPES.length);
             }

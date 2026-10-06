@@ -250,7 +250,6 @@ class Player extends Actor {
         if (this.hp <= 0 && this.st !== 'DEAD') {
             this.die();
             return;
-        } return;
         }
         if (this.postureCd <= 0 && this.st !== 'STAGGER') {
             const rate = (this.guarding ? 34 : 17) * (0.4 + 0.6 * this.hp / this.maxHp);
